@@ -1,0 +1,138 @@
+{
+  "info": {
+    "name": "Maykel Repuestos 2 - API REST (PostgreSQL)",
+    "description": "Colección oficial de endpoints para el Proyecto de Título Maykel Repuestos 2 (Calama). Cumple RF01-RF07 y RNF01-RNF06.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Healthcheck y SLA Sincronización",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8080/api/health",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "health"]
+        }
+      }
+    },
+    {
+      "name": "2. Taxonomía - Listar Marcas Chinas",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8080/api/marcas?formato=objetos",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "marcas"],
+          "query": [{"key": "formato", "value": "objetos"}]
+        }
+      }
+    },
+    {
+      "name": "3. Taxonomía - Modelos por Marca (Cascada Nivel 2)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8080/api/modelos?marca_id=1",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "modelos"],
+          "query": [{"key": "marca_id", "value": "1"}]
+        }
+      }
+    },
+    {
+      "name": "4. Taxonomía - Versiones Año/Motor/Cilindrada (Cascada Nivel 3)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8080/api/versiones?modelo_id=1",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "versiones"],
+          "query": [{"key": "modelo_id", "value": "1"}]
+        }
+      }
+    },
+    {
+      "name": "5. Catálogo - Buscar Repuestos (Precios Ocultos RF01)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8080/api/repuestos?marca=Great Wall",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "repuestos"],
+          "query": [{"key": "marca", "value": "Great Wall"}]
+        }
+      }
+    },
+    {
+      "name": "6. Reservas - Emitir Reserva Formal con Folio (HU-03)",
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"repuestoId\": 1,\n  \"cantidad\": 2,\n  \"nombre\": \"Taller Mecánico Calama\",\n  \"telefono\": \"+56987654321\",\n  \"email\": \"contacto@tallercalama.cl\",\n  \"nota\": \"Great Wall Poer 2.0 Turbo Diesel 2022\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8080/api/reservas",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "reservas"]
+        }
+      }
+    },
+    {
+      "name": "7. ETL - Sincronización Unidireccional de Inventario (HU-05)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key": "Content-Type", "value": "application/json"},
+          {"key": "Authorization", "value": "Bearer maykel2_sync_token_secreto_2026"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"productos\": [\n    {\"codigo_interno\": \"MR-GW-001\", \"nombre\": \"Pastillas de Freno Great Wall Poer\", \"stock\": 10},\n    {\"codigo_interno\": \"MR-NUEVO-099\", \"nombre\": \"Bomba de Agua JAC T8 2.0 CTI\", \"stock\": 5}\n  ]\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8080/api/v1/sync/inventory",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "v1", "sync", "inventory"]
+        }
+      }
+    },
+    {
+      "name": "8. Admin BI - Dashboard y Demanda Insatisfecha (HU-06)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key": "Authorization", "value": "Basic YWRtaW46bWF5a2VsMjAyNg=="}
+        ],
+        "url": {
+          "raw": "http://localhost:8080/api/admin/dashboard",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "admin", "dashboard"]
+        }
+      }
+    }
+  ]
+}

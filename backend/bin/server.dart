@@ -119,16 +119,28 @@ Map<String, dynamic> contenidoPorDefecto() {
           'Maykel Repuestos Limitada. Todos los derechos reservados.',
     },
     'historia': {
-      'titulo': 'Más de una década sirviendo a Calama',
+      'titulo': 'Desde 2015 moviendo a Calama',
       'texto':
-          'Maykel Repuestos Limitada provee repuestos, accesorios e insumos automotrices '
-              'y mineros que garantizan la continuidad operativa de clientes particulares, '
-              'talleres mecánicos y flotas en Calama y la Región de Antofagasta.',
+          'Maykel Repuestos Limitada nació en Calama e inició actividades el 22 de octubre de 2015. '
+              'Desde entonces se ha especializado en repuestos para vehículos de marcas chinas '
+              '(Great Wall, Haval, Maxus, Chery, JAC, Jetour, Changan y MG, entre otras), '
+              'atendiendo a conductores particulares y talleres mecánicos de la ciudad. '
+              'Con los años sumó una línea de insumos para vehículos de faena minera, como pértigas, '
+              'balizas y elementos de señalización.\n\n'
+              'Nuestra misión es proveer repuestos, accesorios e insumos de calidad que garanticen la '
+              'continuidad operativa de nuestros clientes, con asesoría técnica experta y un inventario '
+              'confiable. Nuestra visión es ser el proveedor de referencia en la Región de Antofagasta, '
+              'digitalizando nuestros procesos para responder con rapidez a cada cliente.',
       'fichas': [
         {'etiqueta': 'Ubicación', 'valor': 'Vargas #2275, Calama'},
-        {'etiqueta': 'Especialidad', 'valor': 'Marcas Chinas e Insumos Mineros'},
-        {'etiqueta': 'Stock', 'valor': 'Sincronización periódica con bodega'},
-        {'etiqueta': 'Atención', 'valor': 'Presencial, WhatsApp y Reserva PDF'},
+        {
+          'etiqueta': 'Giro comercial',
+          'valor':
+              'Venta al por mayor y menor de partes, piezas y accesorios para vehículos'
+        },
+        {'etiqueta': 'Especialidad', 'valor': 'Marcas chinas e insumos mineros'},
+        {'etiqueta': 'En Calama desde', 'valor': '2015'},
+        {'etiqueta': 'Atención', 'valor': 'Presencial, WhatsApp y reserva en línea'},
       ],
     },
     'servicios': [

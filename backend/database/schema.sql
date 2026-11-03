@@ -269,13 +269,33 @@ INSERT INTO categorias (id, nombre, descripcion, es_insumo_minero) VALUES
 SELECT setval('categorias_id_seq', 5);
 
 INSERT INTO productos (id, codigo_interno, codigo_oem, nombre, descripcion_tecnica, categoria_id, marca_referencia, modelo_referencia, imagen_url, stock_actual, es_insumo_faena, estado_catalogo) VALUES
-(1, 'MR-GW-001', '3501110XKW09A', 'Pastillas de Freno Delanteras Cerámicas Great Wall Poer', 'Juego de 4 pastillas cerámicas de alta resistencia térmica, incluye sensor acústico de desgaste.', 1, 'Great Wall', 'Poer', 'assets/images/logo.jpg', 8, FALSE, 'PUBLICADO'),
-(2, 'MR-GW-002', '1012100-ED01', 'Filtro de Aceite Original Great Wall 2.0 Diesel', 'Filtro blindado de alto flujo para motores 4D20M Turbo Diesel.', 3, 'Great Wall', 'Poer / Wingle 5', 'assets/images/logo.jpg', 15, FALSE, 'PUBLICADO'),
-(3, 'MR-CH-001', 'J69-3501080', 'Pastillas de Freno Chery Tiggo 2', 'Compuesto semimetálico norma OEM para eje delantero.', 1, 'Chery', 'Tiggo 2', 'assets/images/logo.jpg', 0, FALSE, 'PUBLICADO'),
-(4, 'MR-MX-001', 'C00049651', 'Amortiguador Delantero Reforzado Maxus T60', 'Amortiguador bitubo presurizado a gas para trabajo pesado en ruta y faena.', 2, 'Maxus', 'T60', 'assets/images/logo.jpg', 2, FALSE, 'PUBLICADO'),
-(5, 'MR-FAENA-01', 'MIN-PERT-12F', 'Pértiga Minera 12 Pies con Resorte y Bandera LED 12V/24V', 'Fibra de vidrio certificada para faenas mineras en Calama, conector rápido pesado.', 5, 'Universal', 'Faena Minera', 'assets/images/logo.jpg', 12, TRUE, 'PUBLICADO'),
-(6, 'MR-FAENA-02', 'MIN-BAL-AMB', 'Baliza Estroboscópica LED Ámbar Base Magnética/Fija', 'Homologada para camionetas de faena, 12V-24V multivoltaje IP67.', 5, 'Universal', 'Faena Minera', 'assets/images/logo.jpg', 0, TRUE, 'PUBLICADO');
-SELECT setval('productos_id_seq', 6);
+(1, 'MR-GW-001', '3501110XKW09A', 'Pastillas de Freno Delanteras Cerámicas Great Wall Poer', 'Juego de 4 pastillas cerámicas de alta resistencia térmica, incluye sensor acústico de desgaste.', 1, 'Great Wall', 'Poer', NULL, 8, FALSE, 'PUBLICADO'),
+(2, 'MR-GW-002', '1012100-ED01', 'Filtro de Aceite Original Great Wall 2.0 Diesel', 'Filtro blindado de alto flujo para motores 4D20M Turbo Diesel.', 3, 'Great Wall', 'Poer / Wingle 5', NULL, 15, FALSE, 'PUBLICADO'),
+(3, 'MR-CH-001', 'J69-3501080', 'Pastillas de Freno Chery Tiggo 2', 'Compuesto semimetálico norma OEM para eje delantero.', 1, 'Chery', 'Tiggo 2', NULL, 0, FALSE, 'PUBLICADO'),
+(4, 'MR-MX-001', 'C00049651', 'Amortiguador Delantero Reforzado Maxus T60', 'Amortiguador bitubo presurizado a gas para trabajo pesado en ruta y faena.', 2, 'Maxus', 'T60', NULL, 2, FALSE, 'PUBLICADO'),
+(5, 'MR-FAENA-01', 'MIN-PERT-12F', 'Pértiga Minera 12 Pies con Resorte y Bandera LED 12V/24V', 'Fibra de vidrio certificada para faenas mineras en Calama, conector rápido pesado.', 5, 'Universal', 'Faena Minera', NULL, 12, TRUE, 'PUBLICADO'),
+(6, 'MR-FAENA-02', 'MIN-BAL-AMB', 'Baliza Estroboscópica LED Ámbar Base Magnética/Fija', 'Homologada para camionetas de faena, 12V-24V multivoltaje IP67.', 5, 'Universal', 'Faena Minera', NULL, 0, TRUE, 'PUBLICADO');
+UPDATE productos SET precio_referencia = CASE id
+    WHEN 1 THEN 24990 WHEN 2 THEN 8990 WHEN 3 THEN 19990
+    WHEN 4 THEN 54990 WHEN 5 THEN 89990 WHEN 6 THEN 34990 END;
+
+-- Catálogo de ejemplo adicional (precios en CLP, solo visibles en el panel admin)
+INSERT INTO productos (id, codigo_interno, codigo_oem, nombre, descripcion_tecnica, categoria_id, marca_referencia, modelo_referencia, precio_referencia, imagen_url, stock_actual, es_insumo_faena, estado_catalogo) VALUES
+(7,  'MR-GW-003', '1109100XP64XA', 'Filtro de Aire Motor Great Wall Wingle 5', 'Elemento filtrante de alta retención para caminos con polvo.', 3, 'Great Wall', 'Wingle 5', 12990, NULL, 10, FALSE, 'PUBLICADO'),
+(8,  'MR-GW-004', '1306100-ED01', 'Kit de Distribución Great Wall 2.0 Diesel', 'Incluye correa, tensor y polea guía para motor 4D20.', 4, 'Great Wall', 'Poer / Wingle 5', 119990, NULL, 3, FALSE, 'PUBLICADO'),
+(9,  'MR-HV-001', '3501101XKZ16A', 'Disco de Freno Delantero Haval H6', 'Disco ventilado, se vende por unidad.', 1, 'Haval', 'H6', 39990, NULL, 6, FALSE, 'PUBLICADO'),
+(10, 'MR-CH-002', 'T11-1109111', 'Filtro de Aire Chery Tiggo 3', 'Reemplazo directo del filtro original.', 3, 'Chery', 'Tiggo 3', 9990, NULL, 9, FALSE, 'PUBLICADO'),
+(11, 'MR-CH-003', 'J69-2904020', 'Terminal de Dirección Chery Tiggo 2', 'Terminal exterior, lado izquierdo o derecho.', 2, 'Chery', 'Tiggo 2', 14990, NULL, 4, FALSE, 'PUBLICADO'),
+(12, 'MR-MX-002', 'C00014682', 'Filtro de Petróleo Maxus T60 2.8', 'Separador de agua integrado.', 3, 'Maxus', 'T60', 16990, NULL, 12, FALSE, 'PUBLICADO'),
+(13, 'MR-MX-003', 'C00048934', 'Bomba de Agua Maxus T60 2.8 Diesel', 'Con empaquetadura incluida.', 4, 'Maxus', 'T60', 74990, NULL, 1, FALSE, 'PUBLICADO'),
+(14, 'MR-JC-001', '1109100U1910', 'Filtro de Aire JAC T8 2.0 CTI', 'Filtro de panel para motor diésel 2.0.', 3, 'JAC', 'T8', 13990, NULL, 7, FALSE, 'PUBLICADO'),
+(15, 'MR-JC-002', '2904100P3010', 'Bandeja de Suspensión Inferior JAC T8', 'Incluye rótula y bujes.', 2, 'JAC', 'T8', 89990, NULL, 2, FALSE, 'PUBLICADO'),
+(16, 'MR-CG-001', 'S101028-0300', 'Pastillas de Freno Delanteras Changan Hunter', 'Compuesto cerámico de bajo polvo.', 1, 'Changan', 'Hunter', 27990, NULL, 5, FALSE, 'PUBLICADO'),
+(17, 'MR-MG-001', '10105969', 'Filtro de Aceite MG ZS 1.5', 'Filtro roscado con válvula antirretorno.', 3, 'MG', 'ZS', 7990, NULL, 20, FALSE, 'PUBLICADO'),
+(18, 'MR-JT-001', 'F01-3501080', 'Pastillas de Freno Jetour X70', 'Juego eje delantero.', 1, 'Jetour', 'X70', 29990, NULL, 0, FALSE, 'PUBLICADO'),
+(19, 'MR-FAENA-03', 'MIN-CUN-PAR', 'Par de Cuñas de Seguridad para Camioneta', 'Poliuretano de alta resistencia, color amarillo.', 5, 'Universal', 'Faena Minera', 24990, NULL, 15, TRUE, 'PUBLICADO'),
+(20, 'MR-FAENA-04', 'MIN-EXT-2KG', 'Extintor PQS 2 kg con Soporte Vehicular', 'Certificado para vehículos de faena.', 5, 'Universal', 'Faena Minera', 32990, NULL, 8, TRUE, 'PUBLICADO');
+SELECT setval('productos_id_seq', 20);
 
 INSERT INTO producto_compatibilidad (producto_id, version_vehiculo_id, notas_tecnicas) VALUES
 (1, 1, 'Aplica versiones 4x2 y 4x4'),

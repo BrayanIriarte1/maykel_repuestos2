@@ -5,6 +5,7 @@ import '../api_service.dart';
 import '../config.dart';
 import '../models.dart';
 import '../widgets/admin_login_dialog.dart';
+import '../widgets/mapa_ubicacion.dart';
 import '../widgets/product_card.dart';
 import '../widgets/reserva_dialog.dart';
 import 'admin_screen.dart';
@@ -539,6 +540,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   runSpacing: 16,
                   children: tarjetas.map((t) => _tarjetaContacto(t, esAngosto)).toList(),
                 ),
+          const SizedBox(height: 24),
+          MapaUbicacion(
+            consulta: SiteContent.actual.contactoDireccion,
+            alto: esAngosto ? 260 : 360,
+          ),
         ],
       ),
     );

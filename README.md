@@ -15,8 +15,12 @@ reglas de negocio:
   WhatsApp o correo.
 - Panel de administración único, con 4 pestañas: **Dashboard**, **Ventas**,
   **Reservas** y **Stock**.
-- Registro de ventas y reservas que descuenta stock automáticamente; el
-  producto pasa a "Agotado" en el catálogo público cuando llega a 0.
+- Registro de ventas en sucursal que descuenta stock automáticamente; el
+  producto pasa a "Agotado" en el catálogo público cuando llega a 0. Las
+  reservas web quedan "pendientes" hasta que un vendedor las confirma.
+- Sección de historia y giro comercial, y mapa con la ubicación de la
+  sucursal (Vargas #2275, Calama).
+- Base de datos **PostgreSQL** (ver `backend/database/schema.sql`).
 - Gestión de productos desde el panel: **agregar y eliminar productos**
   del catálogo directamente desde la pestaña Stock, sin tocar el archivo
   de datos a mano.
@@ -39,7 +43,7 @@ reglas de negocio:
 
 ```
 maykel_flutter/
-  backend/    — servidor Dart (shelf) con la API y la "base de datos" en JSON
+  backend/    — servidor Dart (shelf) con la API REST y la base de datos PostgreSQL
   app/        — app Flutter Web (catálogo público + panel admin)
 ```
 
@@ -51,17 +55,29 @@ instalación y ejecución:
 
 ## Inicio rápido
 
+Necesitas [Flutter](https://docs.flutter.dev/get-started/install) (incluye
+Dart) y [PostgreSQL](https://www.postgresql.org/download/).
+
 ```bash
-# 1. Compila la app Flutter
+# 1. Base de datos: crea la base y carga tablas + datos de ejemplo
+createdb -U postgres maykel_repuestos_db
+psql -U postgres -d maykel_repuestos_db -f backend/database/schema.sql
+
+# 2. Compila la app Flutter
 cd app
 flutter pub get
-flutter build web
+flutter build web --no-web-resources-cdn
 
-# 2. Corre el backend (sirve la API y la app compilada, todo en un puerto)
+# 3. Configura y corre el backend (sirve la API y la app, todo en un puerto)
 cd ../backend
+cp .env.example .env      # y pon tu clave de PostgreSQL en DB_PASS
 dart pub get
 dart run bin/server.dart
 ```
 
-Abre `http://localhost:8080` en tu navegador.
+Abre `http://localhost:8080` en tu navegador. Para entrar al panel usa el
+enlace **Admin** con `admin` / `maykel2026` (ver más usuarios en
+[`backend/README.md`](backend/README.md)).
 
+`--no-web-resources-cdn` deja los archivos del motor gráfico dentro del
+build, así el sitio funciona aunque no haya internet en la presentación.

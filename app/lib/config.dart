@@ -13,14 +13,16 @@ class ContactoConfig {
   static const String whatsappNumber = '569';
   static const String contactEmail = '@gmail.com';
   static const String direccion =
-      'Vargas 2228-A, Calama, Región de Antofagasta';
+      'Vargas #2275, Calama, Región de Antofagasta';
   static const String mapsUrl =
       'https://www.google.com/maps/place/Maykel+Repuestos/@-22.4608953,-68.9286172,21z/data=!4m6!3m5!1s0x4ab51954d66992f7:0x3daf1bf514abec72!8m2!3d-22.4607923!4d-68.9285291';
   static const String horario =
       'Lunes a viernes, 9:30 – 19:00\nSábado, 9:30 – 14:00';
 }
 
-/// Paleta de colores del diseño original (industrial, rojo/carbón/amarillo).
+/// Paleta basada en el logo de Maykel Repuestos: rojo, blanco y negro/carbón.
+/// `yellow` se mantiene como nombre por compatibilidad, pero ahora es un rojo
+/// claro del degradado del logo, usado como acento sobre fondos oscuros.
 class AppColors {
   static const Color red = Color(0xFFD91E2B);
   static const Color redDark = Color(0xFF9E1119);
@@ -29,7 +31,7 @@ class AppColors {
   static const Color steel = Color(0xFF767B84);
   static const Color paper = Color(0xFFF2EFE9);
   static const Color paper2 = Color(0xFFE7E2D8);
-  static const Color yellow = Color(0xFFF2B705);
+  static const Color yellow = Color(0xFFFF5A64);
   static const Color ok = Color(0xFF2E7D46);
   static const Color warn = Color(0xFFB8860B);
   static const Color bad = Color(0xFFB0201F);

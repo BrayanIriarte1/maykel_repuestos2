@@ -605,7 +605,7 @@ class ContenidoSitio {
       ],
       contactoWhatsapp: '56969170551',
       contactoEmail: 'gesma.perez@gmail.com',
-      contactoDireccion: 'Vargas 2228-A, Calama, Región de Antofagasta',
+      contactoDireccion: 'Vargas #2275, Calama, Región de Antofagasta',
       contactoMapsUrl:
           'https://www.google.com/maps/place/Maykel+Repuestos/@-22.4608953,-68.9286172,21z/data=!4m6!3m5!1s0x4ab51954d66992f7:0x3daf1bf514abec72!8m2!3d-22.4607923!4d-68.9285291',
       contactoHorario: 'Lunes a viernes, 9:30 – 19:00\nSábado, 9:30 – 14:00',
@@ -614,7 +614,7 @@ class ContenidoSitio {
         SeccionLegal(
           titulo: '1. Identificación',
           texto: 'Este sitio web es operado por Maykel Repuestos, negocio dedicado a la '
-              'venta de repuestos automotrices, con domicilio en Vargas 2228-A, '
+              'venta de repuestos automotrices, con domicilio en Vargas #2275, '
               'Calama, Región de Antofagasta, Chile. Para consultas sobre este '
               'aviso legal, puedes escribir a @.',
         ),

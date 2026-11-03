@@ -8,12 +8,23 @@ class DatabaseService {
   DatabaseService._internal();
 
   Connection? _connection;
-  late DotEnv env;
+  /// Variables de configuración: primero se leen del archivo `.env` (si
+  /// existe) y luego las variables de entorno del sistema operativo, que
+  /// tienen prioridad.
+  final Map<String, String> env = {};
 
   Future<void> init() async {
-    env = DotEnv(includePlatformEnvironment: true)..load();
+    final archivoEnv = DotEnv(quiet: true);
+    if (File('.env').existsSync()) archivoEnv.load(['.env']);
+    for (final clave in [
+      'PORT', 'DB_HOST', 'DB_PORT', 'DB_NAME', 'DB_USER', 'DB_PASS',
+      'SYNC_API_TOKEN', 'ADMIN_USERS',
+    ]) {
+      final valor = Platform.environment[clave] ?? archivoEnv[clave];
+      if (valor != null && valor.isNotEmpty) env[clave] = valor;
+    }
 
-    final host = env['DB_HOST'] ?? Platform.environment['DB_HOST'] ?? 'localhost';
+    final host = env['DB_HOST'] ?? 'localhost';
     final port = int.tryParse(env['DB_PORT'] ?? '5432') ?? 5432;
     final database = env['DB_NAME'] ?? 'maykel_repuestos_db';
     final username = env['DB_USER'] ?? 'postgres';

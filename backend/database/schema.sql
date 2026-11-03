@@ -3,6 +3,7 @@
 -- Script DDL + Seed Data Unificado (3NF + Compatibilidad Frontend/Admin)
 -- ============================================================================
 
+DROP TABLE IF EXISTS ventas CASCADE;
 DROP TABLE IF EXISTS logs_auditoria CASCADE;
 DROP TABLE IF EXISTS logs_sincronizacion CASCADE;
 DROP TABLE IF EXISTS metricas_demanda CASCADE;
@@ -32,7 +33,7 @@ CREATE TABLE usuarios (
     usuario VARCHAR(60) UNIQUE NOT NULL,        -- Para login del panel (ej: 'admin', 'francisca')
     nombre VARCHAR(100) NOT NULL,
     email VARCHAR(120) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,        -- Soporta validación y hash
+    password_hash VARCHAR(255) NOT NULL,        -- Formato sha256$<sal>$<hash>
     rol VARCHAR(30) NOT NULL DEFAULT 'SUPERADMIN' CHECK (rol IN ('SUPERADMIN', 'VENDEDOR')),
     rol_id INT REFERENCES roles(id) ON DELETE SET NULL,
     activo BOOLEAN DEFAULT TRUE,
@@ -115,7 +116,10 @@ CREATE TABLE producto_compatibilidad (
 -- ============================================================================
 -- 5. MÓDULO DE RESERVAS ASISTIDAS Y FOLIO CORRELATIVO (HU-03, HU-04)
 -- ============================================================================
-CREATE SEQUENCE IF NOT EXISTS seq_folio_reserva START 1001;
+DROP SEQUENCE IF EXISTS seq_folio_reserva CASCADE;
+DROP SEQUENCE IF EXISTS seq_folio_venta CASCADE;
+CREATE SEQUENCE seq_folio_reserva START 1001;
+CREATE SEQUENCE seq_folio_venta START 1;
 
 CREATE TABLE reservas (
     id SERIAL PRIMARY KEY,
@@ -141,6 +145,23 @@ CREATE TABLE reserva_detalles (
     producto_id INT NOT NULL REFERENCES productos(id) ON DELETE CASCADE,
     cantidad INT NOT NULL DEFAULT 1 CHECK (cantidad > 0),
     vehiculo_referencia VARCHAR(200)
+);
+
+-- Ventas registradas en sucursal desde el panel admin (descuentan stock)
+CREATE TABLE ventas (
+    id SERIAL PRIMARY KEY,
+    folio VARCHAR(30) UNIQUE NOT NULL DEFAULT ('VTA-' || LPAD(nextval('seq_folio_venta')::text, 5, '0')),
+    producto_id INT REFERENCES productos(id) ON DELETE SET NULL,
+    sku VARCHAR(60) NOT NULL,
+    producto_nombre VARCHAR(180) NOT NULL,
+    precio_unitario INT NOT NULL DEFAULT 0 CHECK (precio_unitario >= 0),
+    cantidad INT NOT NULL CHECK (cantidad > 0),
+    total INT NOT NULL DEFAULT 0,
+    cliente VARCHAR(120),
+    metodo_pago VARCHAR(40),
+    nota TEXT,
+    usuario_registro VARCHAR(60),
+    creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- ============================================================================
@@ -187,6 +208,7 @@ CREATE INDEX idx_versiones_cascada ON versiones_vehiculo(modelo_id, anio, motor,
 CREATE INDEX idx_productos_busqueda ON productos(categoria_id, estado_catalogo, es_agotado);
 CREATE INDEX idx_productos_codigo ON productos(codigo_interno);
 CREATE INDEX idx_compatibilidad_version ON producto_compatibilidad(version_vehiculo_id, producto_id);
+CREATE INDEX idx_ventas_fecha ON ventas(creado_en DESC);
 CREATE INDEX idx_metricas_tipo_fecha ON metricas_demanda(tipo_evento, fecha_evento DESC);
 
 -- ============================================================================
@@ -199,9 +221,11 @@ INSERT INTO roles (id, nombre, permisos) VALUES
 SELECT setval('roles_id_seq', 2);
 
 INSERT INTO usuarios (usuario, nombre, email, password_hash, rol, rol_id) VALUES
-('admin', 'Francisca Soto', 'francisca.soto@maykelrepuestos.cl', 'maykel2026', 'SUPERADMIN', 1),
-('daniel', 'Daniel Collado', 'daniel.collado@maykelrepuestos.cl', 'maykel2026', 'SUPERADMIN', 1),
-('vendedor', 'Maximiliano Carvajal', 'ventas@maykelrepuestos.cl', 'ventas2026', 'VENDEDOR', 2);
+('admin', 'Francisca Soto', 'francisca.soto@maykelrepuestos.cl', 'sha256$a1f3c9d2e8b7$ae62e2b693e64c0d8283b3d06e81b0ad5da71f506d3329a30d91d0eec24edf34', 'SUPERADMIN', 1),
+('daniel', 'Daniel Collado', 'daniel.collado@maykelrepuestos.cl', 'sha256$5b8e2d4f7a1c$7201713a73be098e9e1c026b33f509467eb26f29cf2dca182c31c962be7aba91', 'SUPERADMIN', 1),
+('vendedor', 'Maximiliano Carvajal', 'ventas@maykelrepuestos.cl', 'sha256$9c4d1e7b3f2a$66cf80bddb6c32eecb59c24b86d394004eb348cba7555281eb26a8925a0b520f', 'VENDEDOR', 2);
+-- Contraseñas de demostración (cámbialas desde el panel): admin y daniel = maykel2026, vendedor = ventas2026.
+-- Se guardan como hash SHA-256 con sal: sha256$<sal>$<hash>
 
 INSERT INTO marcas (id, nombre) VALUES
 (1, 'Great Wall'),

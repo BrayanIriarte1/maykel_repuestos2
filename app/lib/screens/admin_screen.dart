@@ -154,7 +154,7 @@ class _AdminScreenState extends State<AdminScreen> {
     });
     try {
       final resultados = await Future.wait([
-        ApiService.instance.getRepuestos(),
+        ApiService.instance.getRepuestosAdmin(),
         ApiService.instance.getReservasAdmin(),
         ApiService.instance.getVentasAdmin(),
         ApiService.instance.getDashboard(),

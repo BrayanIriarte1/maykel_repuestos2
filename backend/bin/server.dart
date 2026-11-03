@@ -6,6 +6,9 @@
 
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
+
+import 'package:crypto/crypto.dart';
 
 import 'package:path/path.dart' as p;
 import 'package:postgres/postgres.dart';
@@ -58,6 +61,34 @@ num _numDe(dynamic v, [num porDefecto = 0]) {
   if (v is num) return v;
   return num.tryParse(v.toString()) ?? porDefecto;
 }
+
+// ---------- Contraseñas (hash SHA-256 con sal) ----------
+
+/// Genera el hash a guardar en `usuarios.password_hash`: `sha256$<sal>$<hash>`.
+String hashPassword(String password, {String? sal}) {
+  final rnd = Random.secure();
+  final s = sal ??
+      List.generate(12, (_) => rnd.nextInt(16).toRadixString(16)).join();
+  final digest = sha256.convert(utf8.encode('$s$password')).toString();
+  return 'sha256\$$s\$$digest';
+}
+
+/// Compara una contraseña con el hash guardado. Acepta también contraseñas
+/// antiguas guardadas en texto plano para no bloquear bases ya creadas.
+bool verificarPassword(String password, String guardado) {
+  final partes = guardado.split('\$');
+  if (partes.length == 3 && partes[0] == 'sha256') {
+    return hashPassword(password, sal: partes[1]) == guardado;
+  }
+  return password == guardado;
+}
+
+/// Permiso que exige cada grupo de rutas /api/admin/<grupo>.
+/// Las rutas que no aparecen aquí solo requieren haber iniciado sesión.
+const Map<String, String> permisoPorRuta = {
+  'usuarios': 'usuarios',
+  'roles': 'usuarios',
+};
 
 // ---------- Contenido por defecto del Sitio Web (Editable en PostgreSQL) ----------
 
@@ -175,7 +206,8 @@ Future<Map<String, dynamic>?> _autenticar(Request request) async {
     final passwordInput = credenciales.substring(separador + 1).trim();
 
     // 1. Acceso inmediato para SuperAdmin maestro (evita bloqueos si la tabla roles aún no se migra)
-    final envAdmins = db.env['ADMIN_USERS'] ?? 'admin:maykel2026,francisca:maykel2026,daniel:maykel2026';
+    // Solo se usa si se define ADMIN_USERS (usuario:clave,usuario2:clave2).
+    final envAdmins = db.env['ADMIN_USERS'] ?? '';
     for (final par in envAdmins.split(',')) {
       final partes = par.split(':');
       if (partes.length >= 2 &&
@@ -193,16 +225,17 @@ Future<Map<String, dynamic>?> _autenticar(Request request) async {
     // 2. Verificación en Base de Datos PostgreSQL (Tabla usuarios + roles)
     final rows = await db.conn.execute(
       Sql.named('''
-        SELECT u.usuario, u.nombre, u.rol, u.activo, r.nombre AS rol_nombre, r.permisos
+        SELECT u.usuario, u.nombre, u.rol, u.activo, r.nombre AS rol_nombre, r.permisos, u.password_hash
         FROM usuarios u
         LEFT JOIN roles r ON u.rol_id = r.id
-        WHERE (u.usuario = @usr OR u.email = @usr) AND u.password_hash = @pwd AND u.activo = TRUE
+        WHERE (u.usuario = @usr OR u.email = @usr) AND u.activo = TRUE
         LIMIT 1
       '''),
-      parameters: {'usr': usuarioInput, 'pwd': passwordInput},
+      parameters: {'usr': usuarioInput},
     );
 
-    if (rows.isNotEmpty) {
+    if (rows.isNotEmpty &&
+        verificarPassword(passwordInput, rows.first[6] as String)) {
       final r = rows.first;
       final rolSistema = r[2] as String;
       final rawPermisos = r[5];
@@ -245,6 +278,23 @@ Middleware _authSoloAdmin() {
       if (request.url.path.startsWith('api/admin/')) {
         final sesion = await _autenticar(request);
         if (sesion != null) {
+          final grupo = request.url.pathSegments.length > 2
+              ? request.url.pathSegments[2]
+              : '';
+          final requerido = permisoPorRuta[grupo];
+          final permisos = (sesion['permisos'] as List).cast<String>();
+          if (requerido != null &&
+              sesion['esSuperAdmin'] != true &&
+              !permisos.contains(requerido)) {
+            return Response(
+              403,
+              body: jsonEncode({'error': 'Tu rol no tiene permiso para esta sección.'}),
+              headers: {
+                'content-type': 'application/json; charset=utf-8',
+                'Access-Control-Allow-Origin': '*',
+              },
+            );
+          }
           final actualizado = request.change(context: {'adminSesion': sesion});
           return innerHandler(actualizado);
         }
@@ -252,7 +302,7 @@ Middleware _authSoloAdmin() {
         return Response(
           401,
           body: jsonEncode({
-            'error': 'Credenciales inválidas. Usa admin / maykel2026'
+            'error': 'Usuario o contraseña incorrectos.'
           }),
           headers: {
             'content-type': 'application/json; charset=utf-8',
@@ -796,6 +846,13 @@ void main(List<String> args) async {
     for (final cambioRaw in cambios) {
       final cambio = cambioRaw as Map<String, dynamic>;
       final id = _numDe(cambio['id']).toInt();
+      if (cambio['precio'] != null) {
+        final precio = _numDe(cambio['precio']).toInt();
+        await db.conn.execute(
+          Sql.named('UPDATE productos SET precio_referencia = @precio WHERE id = @id'),
+          parameters: {'precio': precio < 0 ? 0 : precio, 'id': id},
+        );
+      }
       if (cambio['stock'] != null) {
         final stock = _numDe(cambio['stock']).toInt();
         await db.conn.execute(
@@ -817,12 +874,18 @@ void main(List<String> args) async {
       return _errorResponse('El nombre del producto es obligatorio');
     }
 
-    final categoriaNombre = body['categoria']?.toString().trim() ?? 'General';
-    final marcaNombre = body['marca']?.toString().trim() ?? 'General';
-    final modeloNombre = body['modelo']?.toString().trim() ?? 'Compatible';
+    String texto(String clave, String porDefecto) {
+      final v = body[clave]?.toString().trim() ?? '';
+      return v.isEmpty ? porDefecto : v;
+    }
+
+    final categoriaNombre = texto('categoria', 'General');
+    final marcaNombre = texto('marca', 'General');
+    final modeloNombre = texto('modelo', 'Compatible');
     final stock = _numDe(body['stock'], 0).toInt();
-    final sku = body['sku']?.toString().trim() ??
-        'MR-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
+    final precio = _numDe(body['precio'], 0).toInt();
+    final sku = texto('sku',
+        'MR-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}');
 
     // Asegurar que exista la categoría en PostgreSQL
     int? categoriaId;
@@ -853,8 +916,8 @@ void main(List<String> args) async {
     final inserted = await db.conn.execute(
       Sql.named('''
         INSERT INTO productos 
-        (codigo_interno, nombre, categoria_id, marca_referencia, modelo_referencia, stock_actual, estado_catalogo)
-        VALUES (@sku, @nombre, @catId, @marca, @modelo, @stock, 'PUBLICADO')
+        (codigo_interno, nombre, categoria_id, marca_referencia, modelo_referencia, stock_actual, precio_referencia, estado_catalogo)
+        VALUES (@sku, @nombre, @catId, @marca, @modelo, @stock, @precio, 'PUBLICADO')
         RETURNING id
       '''),
       parameters: {
@@ -864,6 +927,7 @@ void main(List<String> args) async {
         'marca': marcaNombre,
         'modelo': modeloNombre,
         'stock': stock < 0 ? 0 : stock,
+        'precio': precio < 0 ? 0 : precio,
       },
     );
 
@@ -874,10 +938,37 @@ void main(List<String> args) async {
       'categoria': categoriaNombre,
       'marca': marcaNombre,
       'modelo': modeloNombre,
-      'precio': 0,
+      'precio': precio,
       'stock': stock,
       'es_ejemplo': false,
     }, status: 201);
+  });
+
+  // Listado interno para el panel: incluye precio de referencia (nunca se
+  // expone en el catálogo público) y productos ocultos o pendientes.
+  router.get('/api/admin/repuestos', (Request req) async {
+    final rows = await db.conn.execute('''
+      SELECT p.id, p.codigo_interno, p.nombre, COALESCE(c.nombre, 'General'),
+             p.marca_referencia, p.modelo_referencia, p.precio_referencia,
+             p.stock_actual, p.estado_catalogo
+      FROM productos p
+      LEFT JOIN categorias c ON p.categoria_id = c.id
+      ORDER BY p.nombre ASC
+    ''');
+    return _jsonResponse(rows
+        .map((r) => {
+              'id': r[0],
+              'sku': r[1],
+              'nombre': r[2],
+              'categoria': r[3],
+              'marca': r[4] ?? 'General',
+              'modelo': r[5] ?? 'Compatible',
+              'precio': r[6] ?? 0,
+              'stock': r[7],
+              'estado_catalogo': r[8],
+              'es_ejemplo': false,
+            })
+        .toList());
   });
 
   router.delete('/api/admin/repuestos/<id>', (Request req, String id) async {
@@ -933,6 +1024,44 @@ void main(List<String> args) async {
         status: 201);
   });
 
+  router.put('/api/admin/roles/<id>', (Request req, String id) async {
+    final idNum = int.tryParse(id);
+    final body = await _leerJsonBody(req);
+    final nombre = body?['nombre']?.toString().trim() ?? '';
+    final permisos = body?['permisos'];
+    if (idNum == null || nombre.isEmpty || permisos is! List) {
+      return _errorResponse('Nombre y lista de permisos son obligatorios');
+    }
+    final res = await db.conn.execute(
+      Sql.named(
+          'UPDATE roles SET nombre = @nom, permisos = @perm::jsonb WHERE id = @id RETURNING id'),
+      parameters: {'id': idNum, 'nom': nombre, 'perm': jsonEncode(permisos)},
+    );
+    if (res.isEmpty) return _errorResponse('Rol no encontrado', status: 404);
+    return _jsonResponse({'id': idNum, 'nombre': nombre, 'permisos': permisos});
+  });
+
+  router.delete('/api/admin/roles/<id>', (Request req, String id) async {
+    final idNum = int.tryParse(id);
+    if (idNum == null) return _errorResponse('ID inválido');
+    if (idNum == 1) {
+      return _errorResponse('El rol Superadministrador no se puede eliminar');
+    }
+    final enUso = await db.conn.execute(
+      Sql.named('SELECT COUNT(*) FROM usuarios WHERE rol_id = @id'),
+      parameters: {'id': idNum},
+    );
+    if (_numDe(enUso.first[0]) > 0) {
+      return _errorResponse(
+          'No se puede eliminar: hay usuarios con este rol. Cámbiales el rol primero.');
+    }
+    await db.conn.execute(
+      Sql.named('DELETE FROM roles WHERE id = @id'),
+      parameters: {'id': idNum},
+    );
+    return _jsonResponse({'ok': true});
+  });
+
   router.get('/api/admin/usuarios', (Request req) async {
     final rows = await db.conn.execute(
         'SELECT id, usuario, nombre, rol_id, activo FROM usuarios ORDER BY id ASC');
@@ -958,6 +1087,14 @@ void main(List<String> args) async {
       return _errorResponse('Usuario y contraseña obligatorios');
     }
 
+    final existe = await db.conn.execute(
+      Sql.named('SELECT 1 FROM usuarios WHERE usuario = @usr'),
+      parameters: {'usr': usuario},
+    );
+    if (existe.isNotEmpty) {
+      return _errorResponse('Ya existe un usuario con ese nombre');
+    }
+
     final res = await db.conn.execute(
       Sql.named('''
         INSERT INTO usuarios (usuario, nombre, email, password_hash, rol, rol_id, activo)
@@ -968,7 +1105,7 @@ void main(List<String> args) async {
         'usr': usuario,
         'nom': nombre,
         'email': '$usuario@maykelrepuestos.cl',
-        'pwd': password,
+        'pwd': hashPassword(password),
         'rol': rolId == 1 ? 'SUPERADMIN' : 'VENDEDOR',
         'rolId': rolId,
       },
@@ -981,6 +1118,63 @@ void main(List<String> args) async {
       'rolId': rolId,
       'activo': true,
     }, status: 201);
+  });
+
+  router.put('/api/admin/usuarios/<id>', (Request req, String id) async {
+    final idNum = int.tryParse(id);
+    final body = await _leerJsonBody(req);
+    if (idNum == null || body == null) return _errorResponse('Datos inválidos');
+
+    final sets = <String>[];
+    final params = <String, dynamic>{'id': idNum};
+    final nombre = body['nombre']?.toString().trim();
+    if (nombre != null && nombre.isNotEmpty) {
+      sets.add('nombre = @nombre');
+      params['nombre'] = nombre;
+    }
+    if (body['rolId'] != null) {
+      final rolId = _numDe(body['rolId']).toInt();
+      sets.add('rol_id = @rolId');
+      sets.add('rol = @rol');
+      params['rolId'] = rolId;
+      params['rol'] = rolId == 1 ? 'SUPERADMIN' : 'VENDEDOR';
+    }
+    final password = body['password']?.toString() ?? '';
+    if (password.isNotEmpty) {
+      sets.add('password_hash = @pwd');
+      params['pwd'] = hashPassword(password);
+    }
+    if (body['activo'] is bool) {
+      sets.add('activo = @activo');
+      params['activo'] = body['activo'];
+    }
+    if (sets.isEmpty) return _jsonResponse({'ok': true});
+
+    final res = await db.conn.execute(
+      Sql.named('UPDATE usuarios SET ${sets.join(', ')} WHERE id = @id RETURNING id'),
+      parameters: params,
+    );
+    if (res.isEmpty) return _errorResponse('Usuario no encontrado', status: 404);
+    return _jsonResponse({'ok': true});
+  });
+
+  router.delete('/api/admin/usuarios/<id>', (Request req, String id) async {
+    final idNum = int.tryParse(id);
+    if (idNum == null) return _errorResponse('ID inválido');
+    final sesion = req.context['adminSesion'] as Map<String, dynamic>?;
+    final fila = await db.conn.execute(
+      Sql.named('SELECT usuario FROM usuarios WHERE id = @id'),
+      parameters: {'id': idNum},
+    );
+    if (fila.isEmpty) return _errorResponse('Usuario no encontrado', status: 404);
+    if (fila.first[0] == sesion?['usuario']) {
+      return _errorResponse('No puedes eliminar tu propio usuario');
+    }
+    await db.conn.execute(
+      Sql.named('DELETE FROM usuarios WHERE id = @id'),
+      parameters: {'id': idNum},
+    );
+    return _jsonResponse({'ok': true});
   });
 
   // ==========================================================================
@@ -1082,6 +1276,9 @@ void main(List<String> args) async {
       FROM reservas
     ''');
 
+    final resVentas = await db.conn.execute(
+        'SELECT COUNT(*), COALESCE(SUM(total), 0) FROM ventas');
+
     final totalReservas = _numDe(resTotales.first[0]).toInt();
     final reservasPendientes = _numDe(resTotales.first[1]).toInt();
     final reservasConcretadas = _numDe(resTotales.first[2]).toInt();
@@ -1120,8 +1317,9 @@ void main(List<String> args) async {
 
     return {
       // Campos esperados por admin_screen.dart de tu compañera:
-      'totalVentas': reservasConcretadas,
-      'montoVentas': 0, // Sin cobros en línea (política ROPO)
+      'totalVentas': _numDe(resVentas.first[0]).toInt(),
+      'montoVentas': _numDe(resVentas.first[1]),
+      'reservasConcretadas': reservasConcretadas,
       'totalReservas': totalReservas,
       'reservasPendientes': reservasPendientes,
       'stockBajoCount': stockBajoRows.length,
@@ -1153,9 +1351,83 @@ void main(List<String> args) async {
     return _jsonResponse(await construirDatosDashboard());
   });
 
-  // Endpoints de compatibilidad para pestaña historial de cierres en panel admin
+  // ==========================================================================
+  // VENTAS EN SUCURSAL (registradas desde el panel, descuentan stock)
+  // ==========================================================================
+  Map<String, dynamic> ventaAJson(ResultRow r) => {
+        'id': r[0],
+        'fecha': (r[1] as DateTime).toIso8601String(),
+        'repuestoId': r[2] ?? 0,
+        'sku': r[3],
+        'producto': r[4],
+        'precio': r[5],
+        'cantidad': r[6],
+        'total': r[7],
+        'cliente': r[8] ?? '',
+        'metodoPago': r[9] ?? '',
+        'nota': r[10] ?? '',
+      };
+
+  const columnasVenta =
+      'folio, creado_en, producto_id, sku, producto_nombre, precio_unitario, cantidad, total, cliente, metodo_pago, nota';
+
   router.get('/api/admin/ventas', (Request req) async {
-    return _jsonResponse([]);
+    final rows = await db.conn
+        .execute('SELECT $columnasVenta FROM ventas ORDER BY creado_en DESC');
+    return _jsonResponse(rows.map(ventaAJson).toList());
+  });
+
+  router.post('/api/admin/ventas', (Request req) async {
+    final body = await _leerJsonBody(req);
+    if (body == null) return _errorResponse('JSON inválido');
+    final productoId = _numDe(body['repuestoId']).toInt();
+    final cantidad = _numDe(body['cantidad'], 0).toInt();
+    if (cantidad <= 0) return _errorResponse('La cantidad debe ser mayor a 0');
+    final sesion = req.context['adminSesion'] as Map<String, dynamic>?;
+
+    try {
+      final venta = await db.conn.runTx((tx) async {
+        final prod = await tx.execute(
+          Sql.named(
+              'SELECT codigo_interno, nombre, precio_referencia, stock_actual FROM productos WHERE id = @id FOR UPDATE'),
+          parameters: {'id': productoId},
+        );
+        if (prod.isEmpty) throw const _ErrorNegocio('El producto no existe');
+        final stock = prod.first[3] as int;
+        if (stock < cantidad) {
+          throw _ErrorNegocio('Stock insuficiente: quedan $stock unidades');
+        }
+        final precio = (prod.first[2] as int?) ?? 0;
+        await tx.execute(
+          Sql.named(
+              'UPDATE productos SET stock_actual = stock_actual - @cant, ultima_sincronizacion = CURRENT_TIMESTAMP WHERE id = @id'),
+          parameters: {'cant': cantidad, 'id': productoId},
+        );
+        final ins = await tx.execute(
+          Sql.named('''
+            INSERT INTO ventas (producto_id, sku, producto_nombre, precio_unitario, cantidad, total, cliente, metodo_pago, nota, usuario_registro)
+            VALUES (@pid, @sku, @nombre, @precio, @cant, @total, @cliente, @metodo, @nota, @usuario)
+            RETURNING $columnasVenta
+          '''),
+          parameters: {
+            'pid': productoId,
+            'sku': prod.first[0],
+            'nombre': prod.first[1],
+            'precio': precio,
+            'cant': cantidad,
+            'total': precio * cantidad,
+            'cliente': body['cliente']?.toString() ?? '',
+            'metodo': body['metodoPago']?.toString() ?? '',
+            'nota': body['nota']?.toString() ?? '',
+            'usuario': sesion?['usuario']?.toString(),
+          },
+        );
+        return ventaAJson(ins.first);
+      });
+      return _jsonResponse(venta, status: 201);
+    } on _ErrorNegocio catch (e) {
+      return _errorResponse(e.mensaje);
+    }
   });
 
   // ==========================================================================
@@ -1182,4 +1454,9 @@ void main(List<String> args) async {
   final server = await io.serve(pipeline, InternetAddress.anyIPv4, port);
   print(
       '🚀 Servidor Backend Unificado Maykel Repuestos 2 (PostgreSQL) corriendo en http://${server.address.host}:${server.port}');
+}
+/// Error de validación de negocio que se devuelve al cliente como 400.
+class _ErrorNegocio implements Exception {
+  final String mensaje;
+  const _ErrorNegocio(this.mensaje);
 }

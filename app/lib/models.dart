@@ -32,6 +32,7 @@ class Repuesto {
   final num precio;
   final num stock;
   final bool esEjemplo;
+  final String? _sku;
 
   Repuesto({
     required this.id,
@@ -42,10 +43,12 @@ class Repuesto {
     required this.precio,
     required this.stock,
     this.esEjemplo = false,
-  });
+    String? sku,
+  }) : _sku = sku;
 
-  /// SKU calculado igual que en el backend: REP-0001, REP-0002, etc.
-  String get sku => 'REP-${id.toString().padLeft(4, '0')}';
+  /// SKU (código interno) que entrega el backend, p. ej. MR-GW-001.
+  String get sku =>
+      (_sku != null && _sku!.isNotEmpty) ? _sku! : 'REP-${id.toString().padLeft(4, '0')}';
 
   factory Repuesto.fromJson(Map<String, dynamic> json) {
     return Repuesto(
@@ -57,6 +60,7 @@ class Repuesto {
       precio: json['precio'] as num? ?? 0,
       stock: json['stock'] as num? ?? 0,
       esEjemplo: json['es_ejemplo'] as bool? ?? false,
+      sku: json['sku'] as String?,
     );
   }
 

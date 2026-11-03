@@ -86,6 +86,20 @@ class ApiService {
         .toList();
   }
 
+  /// Listado interno del panel admin: incluye precio de referencia y
+  /// productos ocultos o pendientes (el catálogo público nunca muestra precio).
+  Future<List<Repuesto>> getRepuestosAdmin() async {
+    final resp = await http.get(_uri('/api/admin/repuestos'),
+        headers: _headers(admin: true));
+    if (resp.statusCode != 200) {
+      throw ApiException('No se pudieron cargar los repuestos.');
+    }
+    final lista = jsonDecode(resp.body) as List;
+    return lista
+        .map((e) => Repuesto.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
   // ---------- Reservas ----------
 
   Future<Reserva> crearReserva({

@@ -5,3 +5,4 @@ catalogo_db.json
 catalogo_db.json.tmp
 
 .env
+logs/

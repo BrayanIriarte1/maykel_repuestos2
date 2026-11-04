@@ -18,6 +18,7 @@ import 'package:shelf_static/shelf_static.dart';
 import '../lib/db.dart';
 import '../lib/notificador.dart';
 import '../lib/seguridad.dart';
+import '../lib/vehiculos.dart';
 
 final db = DatabaseService();
 
@@ -639,6 +640,32 @@ void main(List<String> args) async {
 
     final whereClause = conditions.join(' AND ');
 
+    // Los JOIN de compatibilidad (lentos con miles de productos) solo si el filtro los usa.
+    final usaCompat = RegExp(r'\b(vv|mo|m)\.').hasMatch(whereClause);
+    final desde = '''
+      FROM productos p
+      LEFT JOIN categorias c ON p.categoria_id = c.id
+      ${usaCompat ? '''
+      LEFT JOIN producto_compatibilidad pc ON p.id = pc.producto_id
+      LEFT JOIN versiones_vehiculo vv ON pc.version_vehiculo_id = vv.id
+      LEFT JOIN modelos mo ON vv.modelo_id = mo.id
+      LEFT JOIN marcas m ON mo.marca_id = m.id''' : ''}
+    ''';
+
+    // Paginación opcional: con ?limite=N responde {total, items}; sin él, la lista completa.
+    final limite = int.tryParse(qp['limite'] ?? '');
+    final pagina = (int.tryParse(qp['pagina'] ?? '') ?? 1).clamp(1, 100000);
+    var total = 0;
+    var paginacion = '';
+    if (limite != null && limite > 0) {
+      final cant = await db.conn.execute(
+        Sql.named('SELECT COUNT(DISTINCT p.id) $desde WHERE $whereClause'),
+        parameters: params,
+      );
+      total = cant.first[0] as int;
+      paginacion = 'LIMIT ${limite.clamp(1, 200)} OFFSET ${(pagina - 1) * limite.clamp(1, 200)}';
+    }
+
     final sql = '''
       SELECT DISTINCT
         p.id,
@@ -655,14 +682,10 @@ void main(List<String> args) async {
         p.es_agotado,
         p.es_insumo_faena,
         p.ultima_sincronizacion
-      FROM productos p
-      LEFT JOIN categorias c ON p.categoria_id = c.id
-      LEFT JOIN producto_compatibilidad pc ON p.id = pc.producto_id
-      LEFT JOIN versiones_vehiculo vv ON pc.version_vehiculo_id = vv.id
-      LEFT JOIN modelos mo ON vv.modelo_id = mo.id
-      LEFT JOIN marcas m ON mo.marca_id = m.id
+      $desde
       WHERE $whereClause
-      ORDER BY p.es_agotado ASC, p.nombre ASC
+      ORDER BY p.es_agotado ASC, p.nombre ASC, p.id ASC
+      $paginacion
     ''';
 
     final rows = await db.conn.execute(Sql.named(sql), parameters: params);
@@ -717,11 +740,39 @@ void main(List<String> args) async {
       };
     }).toList();
 
+    if (limite != null && limite > 0) {
+      return _jsonResponse({'total': total, 'pagina': pagina, 'items': productos});
+    }
     return _jsonResponse(productos);
   }
 
   router.get('/api/productos', manejarConsultaCatalogo);
   router.get('/api/repuestos', manejarConsultaCatalogo);
+
+  // Filtro jerárquico Marca -> Modelo con conteos, calculado sobre lo publicado.
+  router.get('/api/catalogo/filtros', (Request req) async {
+    final marca = req.url.queryParameters['marca']?.trim() ?? '';
+    final marcas = await db.conn.execute('''
+      SELECT marca_referencia, COUNT(*) FROM productos
+      WHERE estado_catalogo = 'PUBLICADO' AND COALESCE(marca_referencia, 'General') <> 'General'
+      GROUP BY 1 ORDER BY 2 DESC, 1 ASC
+    ''');
+    final modelos = marca.isEmpty
+        ? []
+        : await db.conn.execute(
+            Sql.named('''
+              SELECT modelo_referencia, COUNT(*) FROM productos
+              WHERE estado_catalogo = 'PUBLICADO' AND marca_referencia ILIKE @m
+                AND COALESCE(modelo_referencia, 'General') NOT IN ('General', 'Compatible')
+              GROUP BY 1 ORDER BY 2 DESC, 1 ASC
+            '''),
+            parameters: {'m': marca},
+          );
+    return _jsonResponse({
+      'marcas': marcas.map((r) => {'nombre': r[0], 'total': r[1]}).toList(),
+      'modelos': modelos.map((r) => {'nombre': r[0], 'total': r[1]}).toList(),
+    });
+  });
 
   // ==========================================================================
   // 4. REGISTRO DE INTERACCIÓN CON PRODUCTO AGOTADO (HU-06)
@@ -1345,6 +1396,7 @@ void main(List<String> args) async {
       if (nombre.length > 180) nombre = nombre.substring(0, 180);
       final precio = item['precio'] == null ? null : _numDe(item['precio']).toInt();
       final categoriaId = await categoriaIdDe(item['categoria']?.toString());
+      final vehiculo = inferirVehiculo(nombre);
 
       if (sku == null || sku.isEmpty) continue;
       if (sku.length > 60) sku = sku.substring(0, 60);
@@ -1360,7 +1412,11 @@ void main(List<String> args) async {
             UPDATE productos 
             SET stock_actual = @stock, ultima_sincronizacion = CURRENT_TIMESTAMP,
                 precio_referencia = COALESCE(@precio, precio_referencia),
-                categoria_id = COALESCE(categoria_id, @cat)
+                categoria_id = COALESCE(categoria_id, @cat),
+                marca_referencia = CASE WHEN @marca::text IS NOT NULL AND COALESCE(marca_referencia, 'General') = 'General'
+                                        THEN @marca::text ELSE marca_referencia END,
+                modelo_referencia = CASE WHEN @modelo::text IS NOT NULL AND COALESCE(modelo_referencia, 'General') = 'General'
+                                         THEN @modelo::text ELSE modelo_referencia END
             WHERE codigo_interno = @sku
           '''),
           parameters: {
@@ -1368,13 +1424,17 @@ void main(List<String> args) async {
             'sku': sku,
             'precio': precio == null ? null : (precio < 0 ? 0 : precio),
             'cat': categoriaId,
+            'marca': vehiculo?.marca,
+            'modelo': vehiculo?.modelo,
           },
         );
       } else {
         await db.conn.execute(
           Sql.named('''
-            INSERT INTO productos (codigo_interno, nombre, stock_actual, estado_catalogo, categoria_id, precio_referencia)
-            VALUES (@sku, @nombre, @stock, @estado, @cat, @precio)
+            INSERT INTO productos (codigo_interno, nombre, stock_actual, estado_catalogo, categoria_id, precio_referencia,
+                                   marca_referencia, modelo_referencia)
+            VALUES (@sku, @nombre, @stock, @estado, @cat, @precio,
+                    COALESCE(@marca::text, 'General'), COALESCE(@modelo::text, 'General'))
           '''),
           parameters: {
             'estado': publicar ? 'PUBLICADO' : 'PENDIENTE',
@@ -1383,6 +1443,8 @@ void main(List<String> args) async {
             'stock': stock < 0 ? 0 : stock,
             'cat': categoriaId,
             'precio': precio == null || precio < 0 ? 0 : precio,
+            'marca': vehiculo?.marca,
+            'modelo': vehiculo?.modelo,
           },
         );
         nuevosPendientes++;

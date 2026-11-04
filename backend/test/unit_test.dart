@@ -5,8 +5,25 @@ import 'package:test/test.dart';
 
 import '../lib/pdf_reserva.dart';
 import '../lib/seguridad.dart';
+import '../lib/vehiculos.dart';
 
 void main() {
+  group('inferirVehiculo', () {
+    test('marca y modelo desde el nombre', () {
+      final v = inferirVehiculo('CHERY TIGGO 2 1,5 17/23 EMP. TAPA VALVULA')!;
+      expect(v.marca, 'Chery');
+      expect(v.modelo, 'TIGGO 2');
+      expect(inferirVehiculo('MG 3 1,5 19/23 DELANTERO RH Q')!.modelo, '3');
+      expect(inferirVehiculo('SENSOR VELOCIDAD MAXUS T60 2,8 17/21')!.marca, 'Maxus');
+      expect(inferirVehiculo('GREAT WALL WINGLE 5 2.0')!.marca, 'Great Wall');
+    });
+
+    test('sin marca conocida devuelve null', () {
+      expect(inferirVehiculo('HU612/2X MANN'), isNull);
+      expect(inferirVehiculo('DUO PACK SILICONA + RENOVADOR'), isNull);
+    });
+  });
+
   group('bcrypt', () {
     test('hash nuevo es bcrypt y verifica', () {
       final h = hashBcrypt('clave-segura');

@@ -186,16 +186,38 @@ paths:
         - {name: anio, in: query, schema: {type: integer}}
         - {name: version_id, in: query, description: Si se envía, ignora marca, modelo y año, schema: {type: integer}}
         - {name: disponible, in: query, description: '`1` = solo con stock', schema: {type: string, enum: ['1']}}
+        - {name: limite, in: query, description: 'Si se envía (1-200), responde `{total, pagina, items}` en vez de la lista completa', schema: {type: integer, minimum: 1, maximum: 200}}
+        - {name: pagina, in: query, description: 'Página (desde 1), solo con `limite`', schema: {type: integer, minimum: 1, default: 1}}
       responses:
         '200':
-          description: Repuestos
+          description: Repuestos (lista, o `{total, pagina, items}` si se usa `limite`)
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: '#/components/schemas/RepuestoPublico'
-  /api/productos:
+  /api/catalogo/filtros:
+    get:
+      tags: [Catálogo]
+      summary: Filtro jerárquico Marca → Modelo con cantidades
+      description: Marcas (y, si se envía `marca`, sus modelos) deducidas del inventario publicado.
+      parameters:
+        - {name: marca, in: query, schema: {type: string}}
+      responses:
+        '200':
+          description: Marcas y modelos con total de productos
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  marcas:
+                    type: array
+                    items: {type: object, properties: {nombre: {type: string}, total: {type: integer}}}
+                  modelos:
+                    type: array
+                    items: {type: object, properties: {nombre: {type: string}, total: {type: integer}}}
     get:
       tags: [Catálogo]
       summary: Alias de /api/repuestos

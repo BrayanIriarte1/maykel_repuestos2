@@ -73,6 +73,25 @@ void main() {
       expect(sw.elapsedMilliseconds, lessThanOrEqualTo(1800));
     });
 
+    test('catálogo paginado devuelve total y respeta el límite', () async {
+      final r = await http.get(u('/api/repuestos?limite=5&pagina=1'));
+      expect(r.statusCode, 200);
+      final data = jsonDecode(r.body) as Map<String, dynamic>;
+      expect((data['items'] as List).length, lessThanOrEqualTo(5));
+      expect(data['total'], isA<int>());
+    });
+
+    test('filtro jerárquico marca → modelo es coherente con el catálogo', () async {
+      final f = jsonDecode((await http.get(u('/api/catalogo/filtros'))).body);
+      final marcas = f['marcas'] as List;
+      if (marcas.isEmpty) return;
+      final marca = marcas.first['nombre'] as String;
+      final r = await http.get(u('/api/repuestos?limite=5&marca=${Uri.encodeQueryComponent(marca)}'));
+      final data = jsonDecode(r.body);
+      expect(data['total'], marcas.first['total']);
+      expect((await http.get(u('/api/catalogo/filtros?marca=${Uri.encodeQueryComponent(marca)}'))).statusCode, 200);
+    });
+
     test('documentación OpenAPI disponible', () async {
       expect((await http.get(u('/api/docs'))).statusCode, 200);
       expect((await http.get(u('/api/docs/openapi.yaml'))).statusCode, 200);

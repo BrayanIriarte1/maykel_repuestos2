@@ -1,5 +1,5 @@
-// Agente local de sincronización de inventario (RF05, RNF05).
-// Lee un CSV exportado desde el POS o Excel y lo envía a la plataforma con
+﻿// Agente local de sincronizaciÃ³n de inventario (RF05, RNF05).
+// Lee un CSV exportado desde el POS o Excel y lo envÃ­a a la plataforma con
 // una llamada HTTPS SALIENTE; la sucursal no necesita puertos abiertos.
 //
 // CSV (UTF-8, separador "," o ";", con encabezado). Columnas aceptadas:
@@ -9,11 +9,11 @@
 //
 // Uso (desde backend/):
 //   dart run tools/sync_agent.dart --sistema [--cada 30] [--simular]
-//       Lee el inventario del sistema de gestión del cliente (SISTEMA_* en .env).
+//       Lee el inventario del sistema de gestiÃ³n del cliente (SISTEMA_* en .env).
 //   dart run tools/sync_agent.dart --archivo C:\inventario\stock.csv --url https://tu-dominio.cl --token TU_TOKEN [--cada 30] [--simular]
-// También acepta las variables SYNC_URL, SYNC_API_TOKEN y SYNC_ARCHIVO (o backend/.env).
+// TambiÃ©n acepta las variables SYNC_URL, SYNC_API_TOKEN y SYNC_ARCHIVO (o backend/.env).
 //   --cada N   repite cada N minutos (por defecto una sola vez)
-//   --simular  solo valida el archivo, no envía nada
+//   --simular  solo valida el archivo, no envÃ­a nada
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -60,17 +60,17 @@ ResultadoLectura leerCsv(String contenido) {
       .where((l) => l.trim().isNotEmpty)
       .toList();
   final errores = <String>[];
-  if (lineas.isEmpty) return ResultadoLectura([], ['El archivo está vacío']);
+  if (lineas.isEmpty) return ResultadoLectura([], ['El archivo estÃ¡ vacÃ­o']);
 
   final sep = lineas.first.split(';').length > lineas.first.split(',').length ? ';' : ',';
   final cab = _partirLinea(lineas.first, sep).map((e) => e.toLowerCase()).toList();
   int idx(List<String> nombres) => cab.indexWhere(nombres.contains);
-  final iSku = idx(['codigo_interno', 'codigo', 'código', 'sku']);
-  final iNombre = idx(['nombre', 'descripcion', 'descripción']);
+  final iSku = idx(['codigo_interno', 'codigo', 'cÃ³digo', 'sku']);
+  final iNombre = idx(['nombre', 'descripcion', 'descripciÃ³n']);
   final iStock = idx(['stock', 'saldo', 'cantidad']);
   if (iSku < 0 || iStock < 0) {
     return ResultadoLectura([],
-        ['Faltan columnas obligatorias (codigo_interno y stock). Encabezado leído: ${cab.join(sep)}']);
+        ['Faltan columnas obligatorias (codigo_interno y stock). Encabezado leÃ­do: ${cab.join(sep)}']);
   }
 
   final vistos = <String>{};
@@ -78,21 +78,21 @@ ResultadoLectura leerCsv(String contenido) {
   for (var n = 1; n < lineas.length; n++) {
     final c = _partirLinea(lineas[n], sep);
     if (c.length <= iSku || c.length <= iStock) {
-      errores.add('Línea ${n + 1}: columnas incompletas');
+      errores.add('LÃ­nea ${n + 1}: columnas incompletas');
       continue;
     }
     final sku = c[iSku];
     final stock = int.tryParse(c[iStock].replaceAll('.', '').split(',').first);
     if (sku.isEmpty) {
-      errores.add('Línea ${n + 1}: código vacío');
+      errores.add('LÃ­nea ${n + 1}: cÃ³digo vacÃ­o');
       continue;
     }
     if (stock == null || stock < 0) {
-      errores.add('Línea ${n + 1} ($sku): stock inválido "${c[iStock]}"');
+      errores.add('LÃ­nea ${n + 1} ($sku): stock invÃ¡lido "${c[iStock]}"');
       continue;
     }
     if (!vistos.add(sku)) {
-      errores.add('Línea ${n + 1} ($sku): código repetido, se ignora');
+      errores.add('LÃ­nea ${n + 1} ($sku): cÃ³digo repetido, se ignora');
       continue;
     }
     productos.add({
@@ -118,7 +118,7 @@ String _limpiarHtml(String s) => s
     .replaceAll('&nbsp;', ' ')
     .trim();
 
-/// El sistema del cliente a veces guarda el nombre como "0" o vacío.
+/// El sistema del cliente a veces guarda el nombre como "0" o vacÃ­o.
 String _nombreUtil(String nombre, String categoria, String codigo, int id) {
   if (nombre.isNotEmpty && nombre != '0') return nombre;
   final base = categoria.isEmpty ? 'Repuesto' : categoria;
@@ -126,8 +126,8 @@ String _nombreUtil(String nombre, String categoria, String codigo, int id) {
   return '$base - $ref';
 }
 
-/// Lee el inventario desde el sistema de gestión del cliente
-/// (https://sistema.maykelrepuestos.cl, Laravel): inicia sesión y consulta
+/// Lee el inventario desde el sistema de gestiÃ³n del cliente
+/// (https://sistema.maykelrepuestos.cl, Laravel): inicia sesiÃ³n y consulta
 /// SOLO LECTURA el JSON de cada bodega (`/materiales_data/<bodega>`).
 /// Une las bodegas por id de material (suma stock) y genera un SKU estable.
 Future<ResultadoLectura> leerSistemaCliente(
@@ -156,7 +156,7 @@ Future<ResultadoLectura> leerSistemaCliente(
     guardarCookies(login);
     final token = RegExp(r'name="_token" value="([^"]+)"').firstMatch(login.body)?.group(1);
     if (token == null) {
-      return ResultadoLectura([], ['No se encontró el formulario de login en $base']);
+      return ResultadoLectura([], ['No se encontrÃ³ el formulario de login en $base']);
     }
     final req = http.Request('POST', Uri.parse('$base/login'))
       ..followRedirects = false
@@ -262,12 +262,12 @@ Future<bool> sincronizarUnaVez(
     stderr.writeln('[$marca] Aviso: $e');
   }
   if (lectura.productos.isEmpty) {
-    stderr.writeln('[$marca] No hay productos válidos para enviar.');
+    stderr.writeln('[$marca] No hay productos vÃ¡lidos para enviar.');
     return false;
   }
-  print('[$marca] ${lectura.productos.length} productos válidos desde $origen');
+  print('[$marca] ${lectura.productos.length} productos vÃ¡lidos desde $origen');
   if (simular) {
-    print('Modo simulación: no se envió nada.');
+    print('Modo simulaciÃ³n: no se enviÃ³ nada.');
     return true;
   }
 
@@ -294,13 +294,13 @@ Future<bool> sincronizarUnaVez(
           print('  Lote ${i ~/ _tamLote + 1}: ${r.body}');
           enviado = true;
         } else if (r.statusCode == 401 || r.statusCode == 503) {
-          stderr.writeln('  Servidor rechazó el envío (${r.statusCode}): ${r.body}');
+          stderr.writeln('  Servidor rechazÃ³ el envÃ­o (${r.statusCode}): ${r.body}');
           return false;
         } else {
-          stderr.writeln('  Intento $intento falló (${r.statusCode})');
+          stderr.writeln('  Intento $intento fallÃ³ (${r.statusCode})');
         }
       } catch (e) {
-        stderr.writeln('  Intento $intento sin conexión: $e');
+        stderr.writeln('  Intento $intento sin conexiÃ³n: $e');
       }
       if (!enviado) await Future<void>.delayed(Duration(seconds: 2 * intento));
     }
@@ -337,7 +337,7 @@ Future<void> main(List<String> args) async {
       stderr.writeln('Faltan SISTEMA_EMAIL y SISTEMA_PASS en backend/.env');
       exit(64);
     }
-    final bodegas = (cfg('SISTEMA_BODEGAS') ?? '2')
+    final bodegas = (cfg('SISTEMA_BODEGAS') ?? '1')
         .split(',')
         .map((e) => int.tryParse(e.trim()))
         .whereType<int>()

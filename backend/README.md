@@ -143,7 +143,7 @@ Configuración en `backend/.env` (no versionado):
 SISTEMA_URL=https://sistema.maykelrepuestos.cl
 SISTEMA_EMAIL=correo_del_sistema
 SISTEMA_PASS=clave_del_sistema
-SISTEMA_BODEGAS=2        # 2 = Repuestos Bodega Sucursal (la de Maykel); 1 = Bodega Central (otro local)
+SISTEMA_BODEGAS=1        # 1 = Repuestos Bodega Sucursal (la de Maykel, ~6.300 productos); 2 = Bodega Central (otro local)
 ```
 
 ```bash
@@ -154,7 +154,7 @@ dart run tools/sync_agent.dart --sistema --cada 30      # repite cada 30 min
 
 Reglas: los productos nuevos se **publican** (con o sin stock); los deshabilitados quedan con stock 0;
 nombre vacío o "0" se reemplaza por "Categoría - código"; código vacío o "0" → `SYS-<id>`;
-código repetido → `<código>-<id>`. El precio se guarda como referencia interna (no se muestra al público).
+código repetido → `<código>-<id>`. El precio se guarda como referencia interna (no se muestra al público). La marca y el modelo del vehículo se deducen del nombre (`lib/vehiculos.dart`) y alimentan el filtro Marca → Modelo del sitio.
 
 
 ```bash

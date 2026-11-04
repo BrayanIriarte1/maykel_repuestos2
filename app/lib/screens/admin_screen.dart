@@ -43,6 +43,20 @@ class _AdminScreenState extends State<AdminScreen> {
   String? _error;
 
   List<Repuesto> _stock = [];
+  String _busquedaStock = '';
+  int _paginaStock = 0;
+  static const _filasStock = 50;
+
+  List<Repuesto> get _stockFiltrado {
+    final q = _busquedaStock.trim().toLowerCase();
+    if (q.isEmpty) return _stock;
+    return _stock
+        .where((p) =>
+            p.nombre.toLowerCase().contains(q) ||
+            p.sku.toLowerCase().contains(q) ||
+            p.categoria.toLowerCase().contains(q))
+        .toList();
+  }
   List<Reserva> _reservas = [];
   List<Venta> _ventas = [];
   DashboardData? _dashboard;
@@ -1111,7 +1125,12 @@ class _AdminScreenState extends State<AdminScreen> {
                   value: _ventaProductoId,
                   isExpanded: true,
                   decoration: const InputDecoration(labelText: 'Producto'),
-                  items: _stock
+                  items: [
+                    ..._stockFiltrado.where((p) => p.stock > 0).take(60),
+                    ..._stock.where((p) =>
+                        p.id == _ventaProductoId &&
+                        !_stockFiltrado.where((x) => x.stock > 0).take(60).any((x) => x.id == p.id)),
+                  ]
                       .map((p) => DropdownMenuItem(
                             value: p.id,
                             enabled: p.stock > 0,
@@ -1408,28 +1427,74 @@ class _AdminScreenState extends State<AdminScreen> {
             ],
           ),
           const SizedBox(height: 14),
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppColors.paper2),
-            ),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: DataTable(
-                columns: const [
-                  DataColumn(label: Text('SKU')),
-                  DataColumn(label: Text('Nombre')),
-                  DataColumn(label: Text('Categoría')),
-                  DataColumn(label: Text('Precio')),
-                  DataColumn(label: Text('Stock')),
-                  DataColumn(label: Text('Estado')),
-                  DataColumn(label: Text('')),
-                ],
-                rows: _stock.map((p) => _filaStock(p)).toList(),
-              ),
-            ),
-          ),
+          Builder(builder: (context) {
+            final lista = _stockFiltrado;
+            final paginas = (lista.length / _filasStock).ceil().clamp(1, 100000);
+            final pagina = _paginaStock.clamp(0, paginas - 1);
+            final visibles = lista.skip(pagina * _filasStock).take(_filasStock).toList();
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    SizedBox(
+                      width: 320,
+                      child: TextField(
+                        decoration: const InputDecoration(
+                          prefixIcon: Icon(Icons.search),
+                          hintText: 'Buscar por nombre, SKU o categoría',
+                          isDense: true,
+                        ),
+                        onChanged: (v) => setState(() {
+                          _busquedaStock = v;
+                          _paginaStock = 0;
+                        }),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Text('${lista.length} de ${_stock.length} productos',
+                        style: const TextStyle(color: AppColors.steel, fontSize: 12.5)),
+                    const Spacer(),
+                    IconButton(
+                      tooltip: 'Anterior',
+                      onPressed: pagina > 0 ? () => setState(() => _paginaStock = pagina - 1) : null,
+                      icon: const Icon(Icons.chevron_left),
+                    ),
+                    Text('Página ${pagina + 1} de $paginas'),
+                    IconButton(
+                      tooltip: 'Siguiente',
+                      onPressed:
+                          pagina < paginas - 1 ? () => setState(() => _paginaStock = pagina + 1) : null,
+                      icon: const Icon(Icons.chevron_right),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.paper2),
+                  ),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: DataTable(
+                      columns: const [
+                        DataColumn(label: Text('SKU')),
+                        DataColumn(label: Text('Nombre')),
+                        DataColumn(label: Text('Categoría')),
+                        DataColumn(label: Text('Precio')),
+                        DataColumn(label: Text('Stock')),
+                        DataColumn(label: Text('Estado')),
+                        DataColumn(label: Text('')),
+                      ],
+                      rows: visibles.map((p) => _filaStock(p)).toList(),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          }),
         ],
       ),
     );

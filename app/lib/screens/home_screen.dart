@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -27,12 +29,29 @@ class _HomeScreenState extends State<HomeScreen> {
   final _contactoKey = GlobalKey();
   final _scrollController = ScrollController();
 
-  List<Repuesto> _productos = [];
+  List<Repuesto> _productos = []; // pool para carruseles y hero
   bool _cargando = true;
   String? _error;
 
+  // Catálogo paginado desde el servidor
+  List<Repuesto> _items = [];
+  int _total = 0;
+  int _totalGeneral = 0;
+  int _pagina = 1;
+  bool _cargandoCat = false;
+  bool _cargandoMas = false;
+  String? _errorCat;
+  static const _porPagina = 24;
+
   String _busqueda = '';
-  String _categoriaActiva = 'Todos';
+  String? _marca;
+  String? _modelo;
+  String? _categoria;
+  bool _soloDisponibles = false;
+  List<(String, int)> _marcas = [];
+  List<(String, int)> _modelos = [];
+  List<String> _categoriasLista = [];
+  Timer? _debounce;
 
   @override
   void initState() {
@@ -41,23 +60,105 @@ class _HomeScreenState extends State<HomeScreen> {
     _cargarContenido();
   }
 
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
   Future<void> _cargarProductos() async {
     setState(() {
       _cargando = true;
       _error = null;
     });
     try {
-      final productos = await ApiService.instance.getRepuestos();
+      final pool = await ApiService.instance
+          .getRepuestosPagina(limite: 60, soloDisponibles: true);
+      if (!mounted) return;
       setState(() {
-        _productos = productos;
+        _productos = pool.items;
         _cargando = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _error = e.toString();
         _cargando = false;
       });
     }
+    _cargarFiltros();
+    _buscarCatalogo();
+  }
+
+  Future<void> _cargarFiltros() async {
+    try {
+      final f = await ApiService.instance.getFiltrosCatalogo(marca: _marca);
+      final cats = await ApiService.instance.getCategorias();
+      if (!mounted) return;
+      setState(() {
+        _marcas = f.marcas;
+        _modelos = f.modelos;
+        _categoriasLista = cats;
+      });
+    } catch (_) {
+      // Los filtros son opcionales: si fallan, el catálogo sigue con búsqueda por texto.
+    }
+  }
+
+  Future<void> _buscarCatalogo({bool mas = false}) async {
+    if (mas) {
+      setState(() => _cargandoMas = true);
+    } else {
+      setState(() {
+        _cargandoCat = true;
+        _errorCat = null;
+        _pagina = 1;
+      });
+    }
+    try {
+      final r = await ApiService.instance.getRepuestosPagina(
+        buscar: _busqueda.trim(),
+        categoria: _categoria,
+        marca: _marca,
+        modelo: _modelo,
+        soloDisponibles: _soloDisponibles,
+        pagina: mas ? _pagina + 1 : 1,
+        limite: _porPagina,
+      );
+      if (!mounted) return;
+      setState(() {
+        if (mas) {
+          _pagina++;
+          _items = [..._items, ...r.items];
+        } else {
+          _items = r.items;
+        }
+        _total = r.total;
+        if (_busqueda.trim().isEmpty &&
+            _marca == null &&
+            _modelo == null &&
+            _categoria == null &&
+            !_soloDisponibles) {
+          _totalGeneral = r.total;
+        }
+        _cargandoCat = false;
+        _cargandoMas = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorCat = e.toString();
+        _cargandoCat = false;
+        _cargandoMas = false;
+      });
+    }
+  }
+
+  void _filtrar(VoidCallback cambio, {bool recargarFiltros = false}) {
+    setState(cambio);
+    _buscarCatalogo();
+    if (recargarFiltros) _cargarFiltros();
   }
 
   Future<void> _cargarContenido() async {
@@ -69,27 +170,6 @@ class _HomeScreenState extends State<HomeScreen> {
       // Si falla, el sitio sigue mostrando el contenido de referencia
       // (SiteContent.actual ya trae ContenidoSitio.porDefecto() por defecto).
     }
-  }
-
-  List<String> get _categorias {
-    final set = <String>{};
-    for (final p in _productos) {
-      if (p.categoria.isNotEmpty) set.add(p.categoria);
-    }
-    final lista = set.toList()..sort();
-    return ['Todos', ...lista];
-  }
-
-  List<Repuesto> get _filtrados {
-    final termino = _busqueda.trim().toLowerCase();
-    return _productos.where((p) {
-      final matchCat = _categoriaActiva == 'Todos' || p.categoria == _categoriaActiva;
-      final matchTermino = termino.isEmpty ||
-          p.nombre.toLowerCase().contains(termino) ||
-          p.marca.toLowerCase().contains(termino) ||
-          p.sku.toLowerCase().contains(termino);
-      return matchCat && matchTermino;
-    }).toList();
   }
 
   List<Repuesto> get _destacados =>
@@ -304,7 +384,7 @@ class _HomeScreenState extends State<HomeScreen> {
           spacing: 14,
           runSpacing: 14,
           children: [
-            _statHero('${_productos.length}', SiteContent.actual.heroEstadisticaProductosEtiqueta),
+            _statHero(_totalGeneral > 0 ? '$_totalGeneral' : '${_productos.length}', SiteContent.actual.heroEstadisticaProductosEtiqueta),
             _statHero(SiteContent.actual.heroEstadisticaMarcasValor,
                 SiteContent.actual.heroEstadisticaMarcasEtiqueta),
             _statHero(SiteContent.actual.heroEstadisticaCategoriasValor,
@@ -618,64 +698,40 @@ class _HomeScreenState extends State<HomeScreen> {
                     borderSide: BorderSide.none,
                   ),
                 ),
-                onChanged: (v) => setState(() => _busqueda = v),
+                onChanged: (v) {
+                  _busqueda = v;
+                  _debounce?.cancel();
+                  _debounce = Timer(const Duration(milliseconds: 350), _buscarCatalogo);
+                },
               ),
             ),
             const SizedBox(height: 16),
-            if (!_cargando)
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: _categorias.map((c) {
-                  final activo = c == _categoriaActiva;
-                  return ChoiceChip(
-                    avatar: c == 'Todos'
-                        ? null
-                        : Icon(iconoCategoria(c),
-                            size: 16, color: activo ? Colors.white : AppColors.red),
-                    label: Text(c),
-                    selected: activo,
-                    showCheckmark: false,
-                    selectedColor: AppColors.red,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                      side: BorderSide(color: activo ? AppColors.red : AppColors.paper2),
-                    ),
-                    labelStyle: TextStyle(
-                      color: activo ? Colors.white : AppColors.char,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12.5,
-                    ),
-                    backgroundColor: Colors.white,
-                    onSelected: (_) => setState(() => _categoriaActiva = c),
-                  );
-                }).toList(),
-              ),
-            if (!_cargando && _error == null) ...[
+            _buildFiltros(),
+            if (!_cargandoCat && _errorCat == null) ...[
               const SizedBox(height: 14),
-              Text('${_filtrados.length} producto${_filtrados.length == 1 ? '' : 's'}',
+              Text('$_total producto${_total == 1 ? '' : 's'}',
                   style: const TextStyle(color: AppColors.steel, fontSize: 12.5)),
             ],
             const SizedBox(height: 18),
-            if (_cargando)
+            if (_cargandoCat)
               const Center(
                   child: Padding(
                 padding: EdgeInsets.symmetric(vertical: 40),
                 child: CircularProgressIndicator(),
               ))
-            else if (_error != null)
+            else if (_errorCat != null)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 30),
-                child: Text('No se pudo cargar el catálogo: $_error',
+                child: Text('No se pudo cargar el catálogo: $_errorCat',
                     style: const TextStyle(color: AppColors.bad)),
               )
-            else if (_filtrados.isEmpty)
+            else if (_items.isEmpty)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 30),
                 child: Text('No encontramos repuestos que coincidan con tu búsqueda.',
                     style: TextStyle(color: AppColors.steel)),
               )
-            else
+            else ...[
               LayoutBuilder(builder: (context, c) {
                 final cols = esAngosto ? 1 : (c.maxWidth / 270).floor().clamp(2, 6);
                 const gap = 18.0;
@@ -683,7 +739,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 return Wrap(
                   spacing: gap,
                   runSpacing: gap,
-                  children: _filtrados
+                  children: _items
                       .map((p) => SizedBox(
                             width: w,
                             child: ProductCard(
@@ -694,9 +750,125 @@ class _HomeScreenState extends State<HomeScreen> {
                       .toList(),
                 );
               }),
+              if (_items.length < _total) ...[
+                const SizedBox(height: 26),
+                Center(
+                  child: OutlinedButton.icon(
+                    onPressed: _cargandoMas ? null : () => _buscarCatalogo(mas: true),
+                    icon: _cargandoMas
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.expand_more),
+                    label: Text('Ver más (${_total - _items.length} restantes)'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.red,
+                      side: const BorderSide(color: AppColors.red),
+                      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                    ),
+                  ),
+                ),
+              ],
+            ],
           ],
         ),
       ),
+    );
+  }
+
+  Widget _desplegable({
+    required String etiqueta,
+    required String? valor,
+    required List<DropdownMenuItem<String?>> items,
+    required ValueChanged<String?> onChanged,
+  }) {
+    return SizedBox(
+      width: 230,
+      child: DropdownButtonFormField<String?>(
+        value: valor,
+        isExpanded: true,
+        decoration: InputDecoration(
+          labelText: etiqueta,
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: AppColors.paper2),
+          ),
+        ),
+        items: items,
+        onChanged: onChanged,
+      ),
+    );
+  }
+
+  /// Filtro jerárquico: Marca -> Modelo, más categoría y disponibilidad.
+  Widget _buildFiltros() {
+    final hayFiltros = _marca != null || _modelo != null || _categoria != null || _soloDisponibles;
+    return Wrap(
+      spacing: 12,
+      runSpacing: 12,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        _desplegable(
+          etiqueta: 'Marca del vehículo',
+          valor: _marca,
+          items: [
+            const DropdownMenuItem<String?>(value: null, child: Text('Todas las marcas')),
+            ..._marcas.map((m) =>
+                DropdownMenuItem<String?>(value: m.$1, child: Text('${m.$1} (${m.$2})'))),
+          ],
+          onChanged: (v) => _filtrar(() {
+            _marca = v;
+            _modelo = null;
+            _modelos = [];
+          }, recargarFiltros: true),
+        ),
+        _desplegable(
+          etiqueta: 'Modelo',
+          valor: _modelos.any((m) => m.$1 == _modelo) ? _modelo : null,
+          items: [
+            DropdownMenuItem<String?>(
+                value: null,
+                child: Text(_marca == null ? 'Elige una marca' : 'Todos los modelos')),
+            ..._modelos.map((m) =>
+                DropdownMenuItem<String?>(value: m.$1, child: Text('${m.$1} (${m.$2})'))),
+          ],
+          onChanged: _marca == null ? (_) {} : (v) => _filtrar(() => _modelo = v),
+        ),
+        _desplegable(
+          etiqueta: 'Categoría',
+          valor: _categoria,
+          items: [
+            const DropdownMenuItem<String?>(value: null, child: Text('Todas las categorías')),
+            ..._categoriasLista
+                .map((c) => DropdownMenuItem<String?>(value: c, child: Text(c))),
+          ],
+          onChanged: (v) => _filtrar(() => _categoria = v),
+        ),
+        FilterChip(
+          label: const Text('Solo con stock'),
+          selected: _soloDisponibles,
+          selectedColor: AppColors.red.withOpacity(0.15),
+          checkmarkColor: AppColors.red,
+          onSelected: (v) => _filtrar(() => _soloDisponibles = v),
+        ),
+        if (hayFiltros)
+          TextButton.icon(
+            onPressed: () => _filtrar(() {
+              _marca = null;
+              _modelo = null;
+              _categoria = null;
+              _soloDisponibles = false;
+              _modelos = [];
+            }, recargarFiltros: true),
+            icon: const Icon(Icons.close, size: 16),
+            label: const Text('Limpiar filtros'),
+          ),
+      ],
     );
   }
 

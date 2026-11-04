@@ -86,6 +86,49 @@ class ApiService {
         .toList();
   }
 
+  /// Catálogo paginado desde el servidor (miles de productos): devuelve una página y el total.
+  Future<({List<Repuesto> items, int total})> getRepuestosPagina({
+    String? buscar,
+    String? categoria,
+    String? marca,
+    String? modelo,
+    bool soloDisponibles = false,
+    int pagina = 1,
+    int limite = 24,
+  }) async {
+    final query = <String, String>{'limite': '$limite', 'pagina': '$pagina'};
+    if (buscar != null && buscar.isNotEmpty) query['buscar'] = buscar;
+    if (categoria != null && categoria.isNotEmpty) query['categoria'] = categoria;
+    if (marca != null && marca.isNotEmpty) query['marca'] = marca;
+    if (modelo != null && modelo.isNotEmpty) query['modelo'] = modelo;
+    if (soloDisponibles) query['disponible'] = '1';
+
+    final resp = await http.get(_uri('/api/repuestos', query));
+    if (resp.statusCode != 200) {
+      throw ApiException('No se pudieron cargar los repuestos.');
+    }
+    final data = jsonDecode(resp.body) as Map<String, dynamic>;
+    final items = (data['items'] as List)
+        .map((e) => Repuesto.fromJson(e as Map<String, dynamic>))
+        .toList();
+    return (items: items, total: (data['total'] as num).toInt());
+  }
+
+  /// Filtro jerárquico Marca -> Modelo con cantidad de productos.
+  Future<({List<(String, int)> marcas, List<(String, int)> modelos})> getFiltrosCatalogo(
+      {String? marca}) async {
+    final resp = await http.get(_uri(
+        '/api/catalogo/filtros', marca == null || marca.isEmpty ? null : {'marca': marca}));
+    if (resp.statusCode != 200) {
+      throw ApiException('No se pudieron cargar los filtros.');
+    }
+    final data = jsonDecode(resp.body) as Map<String, dynamic>;
+    List<(String, int)> leer(String k) => (data[k] as List)
+        .map((e) => ((e as Map)['nombre'].toString(), (e['total'] as num).toInt()))
+        .toList();
+    return (marcas: leer('marcas'), modelos: leer('modelos'));
+  }
+
   /// Listado interno del panel admin: incluye precio de referencia y
   /// productos ocultos o pendientes (el catálogo público nunca muestra precio).
   Future<List<Repuesto>> getRepuestosAdmin() async {

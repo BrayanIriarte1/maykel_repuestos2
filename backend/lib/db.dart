@@ -19,6 +19,9 @@ class DatabaseService {
     for (final clave in [
       'PORT', 'DB_HOST', 'DB_PORT', 'DB_NAME', 'DB_USER', 'DB_PASS',
       'SYNC_API_TOKEN', 'ADMIN_USERS',
+      'WHATSAPP_TOKEN', 'WHATSAPP_PHONE_ID', 'WHATSAPP_DESTINO',
+      'WHATSAPP_API_VERSION', 'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER',
+      'SMTP_PASS', 'SMTP_SSL', 'SMTP_FROM', 'EMAIL_DESTINO',
     ]) {
       final valor = Platform.environment[clave] ?? archivoEnv[clave];
       if (valor != null && valor.isNotEmpty) env[clave] = valor;

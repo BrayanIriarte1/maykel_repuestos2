@@ -19,6 +19,7 @@ import 'package:shelf_router/shelf_router.dart';
 import 'package:shelf_static/shelf_static.dart';
 
 import '../lib/db.dart';
+import '../lib/notificador.dart';
 
 final db = DatabaseService();
 
@@ -709,12 +710,13 @@ void main(List<String> args) async {
 
     // Restricción Cap. 5.1.2 del Informe:
     // "Una reserva web no descuenta inventario físico de forma automática. Queda Pendiente de confirmación".
+    final lineasNotificacion = <String>[];
     final result = await db.conn.runTx((tx) async {
       final resCabecera = await tx.execute(
         Sql.named('''
           INSERT INTO reservas 
           (cliente_nombre, cliente_telefono, cliente_email, cliente_rut_o_taller, nota, estado, notificado_whatsapp, notificado_email)
-          VALUES (@nombre, @telefono, @email, @taller, @nota, 'pendiente', TRUE, TRUE)
+          VALUES (@nombre, @telefono, @email, @taller, @nota, 'pendiente', FALSE, FALSE)
           RETURNING id, folio, creado_en
         '''),
         parameters: {
@@ -752,6 +754,7 @@ void main(List<String> args) async {
         primerProductoNombre = prodRow.first[1].toString();
         primeraCantidad = cant;
         primerProdId = prodId;
+        lineasNotificacion.add('$primerProductoNombre ($primerSku) x$cant');
 
         await tx.execute(
           Sql.named('''
@@ -783,6 +786,19 @@ void main(List<String> args) async {
         'estado': 'pendiente',
       };
     });
+
+    // Envío en segundo plano: no retrasa ni rompe la respuesta al cliente (RNF06).
+    Notificador(db.env).notificarReserva(result, lineasNotificacion).then((n) {
+      db.conn.execute(
+        Sql.named(
+            'UPDATE reservas SET notificado_whatsapp=@w, notificado_email=@e WHERE id=@id'),
+        parameters: {
+          'w': n.whatsapp,
+          'e': n.email,
+          'id': result['reserva_id_interno'],
+        },
+      );
+    }).catchError((Object e) => print('⚠️ Notificación falló: $e'));
 
     return _jsonResponse(result, status: 201);
   });

@@ -118,6 +118,14 @@ String _limpiarHtml(String s) => s
     .replaceAll('&nbsp;', ' ')
     .trim();
 
+/// El sistema del cliente a veces guarda el nombre como "0" o vacío.
+String _nombreUtil(String nombre, String categoria, String codigo, int id) {
+  if (nombre.isNotEmpty && nombre != '0') return nombre;
+  final base = categoria.isEmpty ? 'Repuesto' : categoria;
+  final ref = (codigo.isEmpty || codigo == '0') ? '#$id' : codigo;
+  return '$base - $ref';
+}
+
 /// Lee el inventario desde el sistema de gestión del cliente
 /// (https://sistema.maykelrepuestos.cl, Laravel): inicia sesión y consulta
 /// SOLO LECTURA el JSON de cada bodega (`/materiales_data/<bodega>`).
@@ -164,7 +172,7 @@ Future<ResultadoLectura> leerSistemaCliente(
     final filas = <int, Map<String, dynamic>>{};
     for (final bodega in bodegas) {
       final r = await cliente.get(
-        Uri.parse('$base/materiales_data/$bodega?draw=1&start=0&length=100000'),
+        Uri.parse('$base/materiales_data/$bodega?draw=1&start=0&length=100000&filtro_estado=todos'),
         headers: {
           'Cookie': cookieHeader(),
           'X-Requested-With': 'XMLHttpRequest',
@@ -191,7 +199,7 @@ Future<ResultadoLectura> leerSistemaCliente(
         filas[id] = {
           'id': id,
           'codigo': _limpiarHtml(c[4]),
-          'nombre': _limpiarHtml(c[0]),
+          'nombre': _nombreUtil(_limpiarHtml(c[0]), _limpiarHtml(c[1]), _limpiarHtml(c[4]), id),
           'categoria': _limpiarHtml(c[1]),
           'precio': int.tryParse(_limpiarHtml(c[5]).replaceAll(RegExp(r'[^0-9]'), '')) ?? 0,
           'stock': habilitado ? (stock < 0 ? 0 : stock) : 0,
@@ -279,7 +287,7 @@ Future<bool> sincronizarUnaVez(
                 'Authorization': 'Bearer ' + token,
                 'Content-Type': 'application/json',
               },
-              body: jsonEncode({'productos': lote}),
+              body: jsonEncode({'productos': lote, 'publicar': sistema != null}),
             )
             .timeout(const Duration(seconds: 30));
         if (r.statusCode == 200) {
@@ -329,7 +337,7 @@ Future<void> main(List<String> args) async {
       stderr.writeln('Faltan SISTEMA_EMAIL y SISTEMA_PASS en backend/.env');
       exit(64);
     }
-    final bodegas = (cfg('SISTEMA_BODEGAS') ?? '1,2')
+    final bodegas = (cfg('SISTEMA_BODEGAS') ?? '2')
         .split(',')
         .map((e) => int.tryParse(e.trim()))
         .whereType<int>()

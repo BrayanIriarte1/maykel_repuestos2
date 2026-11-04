@@ -1309,6 +1309,8 @@ void main(List<String> args) async {
     final body = await _leerJsonBody(req);
     final lote = (body?['productos'] as List<dynamic>?) ?? [];
 
+    // Con "publicar": true los productos nuevos salen directo al catálogo.
+    final publicar = body?['publicar'] == true;
     int procesados = 0;
     int agotados = 0;
     int nuevosPendientes = 0;
@@ -1372,9 +1374,10 @@ void main(List<String> args) async {
         await db.conn.execute(
           Sql.named('''
             INSERT INTO productos (codigo_interno, nombre, stock_actual, estado_catalogo, categoria_id, precio_referencia)
-            VALUES (@sku, @nombre, @stock, 'PENDIENTE', @cat, @precio)
+            VALUES (@sku, @nombre, @stock, @estado, @cat, @precio)
           '''),
           parameters: {
+            'estado': publicar ? 'PUBLICADO' : 'PENDIENTE',
             'sku': sku,
             'nombre': nombre,
             'stock': stock < 0 ? 0 : stock,

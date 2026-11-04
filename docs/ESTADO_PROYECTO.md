@@ -9,7 +9,7 @@ Backend real: Dart/shelf + PostgreSQL (ES1 y ClickUp dicen Node/Express: actuali
 | HU-03/RF03 Reserva con folio | Hecho | `POST /api/reservas` |
 | HU-04/RF04 Notificación WhatsApp + email | Hecho (falta credenciales reales) | `lib/notificador.dart`, `.env` |
 | PDF de reserva | Hecho | `lib/pdf_reserva.dart` |
-| HU-05/RF05 Sincronización de stock | Hecho (agente CSV) | `tools/sync_agent.dart`; falta instalarlo en la bodega |
+| HU-05/RF05 Sincronización de stock | Hecho (conector directo con el sistema del cliente, bodega Sucursal + CSV) | `tools/sync_agent.dart --sistema`; falta programarlo cada 30 min |
 | HU-06 Alerta stock desactualizado (2 h) | Parcial | verificar visualización en dashboard |
 | HU-07/RF07 Dashboard/analítica | Hecho | panel Analítica |
 | RNF03 JWT + bcrypt | Hecho | `lib/seguridad.dart` |

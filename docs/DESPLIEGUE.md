@@ -47,8 +47,9 @@ pg_restore -U postgres -d maykel_repuestos2 --clean respaldo_2026-01-01.dump
 Windows: Programador de tareas con `"C:\Program Files\PostgreSQL\18\bin\pg_dump.exe" -U postgres -Fc -f C:\respaldos\maykel.dump maykel_repuestos2`.
 
 ## 7. Agente de sincronización en la bodega (Windows)
-Programador de tareas, cada 30 min:
-`dart run tools\sync_agent.dart --archivo C:\inventario\stock.csv --url https://tu-dominio.cl --token TU_TOKEN`
+Programador de tareas, cada 30 min (desde la carpeta `backend`, con las variables `SISTEMA_*` en `.env`):
+`dart run tools\sync_agent.dart --sistema`
+(alternativa con CSV: `dart run tools\sync_agent.dart --archivo C:\inventario\stock.csv --url https://tu-dominio.cl --token TU_TOKEN`)
 Si pasan 2 h sin sincronizar el sistema marca "Stock desactualizado".
 
 ## 8. Pendientes de seguridad recomendados

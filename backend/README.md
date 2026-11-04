@@ -133,7 +133,29 @@ dart run tools/sync_agent.dart --archivo C:\inventario\stock.csv --url https://t
 dart run tools/sync_agent.dart --archivo tools/ejemplo_inventario.csv --simular   # solo valida
 ```
 
-## Pruebas
+### Conexión directa con el sistema del cliente (`--sistema`)
+
+Sin CSV: el agente inicia sesión (solo lectura) en `https://sistema.maykelrepuestos.cl`, lee
+`/materiales_data/<bodega>?filtro_estado=todos` y envía código, nombre, categoría, stock y valor.
+Configuración en `backend/.env` (no versionado):
+
+```
+SISTEMA_URL=https://sistema.maykelrepuestos.cl
+SISTEMA_EMAIL=correo_del_sistema
+SISTEMA_PASS=clave_del_sistema
+SISTEMA_BODEGAS=2        # 2 = Repuestos Bodega Sucursal (la de Maykel); 1 = Bodega Central (otro local)
+```
+
+```bash
+dart run tools/sync_agent.dart --sistema --simular      # solo valida
+dart run tools/sync_agent.dart --sistema                # sincroniza una vez
+dart run tools/sync_agent.dart --sistema --cada 30      # repite cada 30 min
+```
+
+Reglas: los productos nuevos se **publican** (con o sin stock); los deshabilitados quedan con stock 0;
+nombre vacío o "0" se reemplaza por "Categoría - código"; código vacío o "0" → `SYS-<id>`;
+código repetido → `<código>-<id>`. El precio se guarda como referencia interna (no se muestra al público).
+
 
 ```bash
 dart test test/unit_test.dart   # unitarias (JWT, bcrypt, PDF): no necesitan servidor

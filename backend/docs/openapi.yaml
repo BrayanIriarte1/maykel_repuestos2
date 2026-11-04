@@ -728,7 +728,9 @@ paths:
       tags: [Sincronización]
       summary: Sincroniza stock desde el agente de bodega
       description: |
-        Actualiza el stock por `codigo_interno` (SKU). Los SKU desconocidos se crean como `PENDIENTE` de catalogación.
+        Actualiza el stock por `codigo_interno` (SKU). Los SKU desconocidos se crean como `PENDIENTE` de catalogación,
+        o como `PUBLICADO` si se envía `publicar: true` (lo usa el conector `--sistema`).
+        `categoria` (se crea si no existe) y `precio` (referencial, no se muestra al público) son opcionales.
         Un token inválido se registra como sincronización `RECHAZADO`.
       security: [{bearerAuth: []}]
       requestBody:
@@ -739,6 +741,7 @@ paths:
               type: object
               required: [productos]
               properties:
+                publicar: {type: boolean, default: false}
                 productos:
                   type: array
                   items:
@@ -747,6 +750,8 @@ paths:
                     properties:
                       codigo_interno: {type: string, example: MR-GW-001}
                       nombre: {type: string}
+                      categoria: {type: string, example: Frenos}
+                      precio: {type: integer, example: 25990}
                       stock: {type: integer, example: 7}
       responses:
         '200':

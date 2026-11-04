@@ -4,7 +4,27 @@
     "description": "Colección oficial de endpoints para el Proyecto de Título Maykel Repuestos 2 (Calama). Cumple RF01-RF07 y RNF01-RNF06.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
+  "variable": [
+    {"key": "token", "value": ""},
+    {"key": "sync_token", "value": "PEGA_AQUI_EL_SYNC_API_TOKEN_DE_backend/.env"}
+  ],
   "item": [
+    {
+      "name": "0. Login - Obtener token JWT (guarda {{token}} automáticamente)",
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["const j = pm.response.json();", "if (j.token) pm.collectionVariables.set('token', j.token);"]}}],
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "body": {"mode": "raw", "raw": "{\n  \"usuario\": \"admin\",\n  \"clave\": \"maykel2026\"\n}"},
+        "url": {
+          "raw": "http://localhost:8080/api/auth/login",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "auth", "login"]
+        }
+      }
+    },
     {
       "name": "1. Healthcheck y SLA Sincronización",
       "request": {
@@ -103,7 +123,7 @@
         "method": "POST",
         "header": [
           {"key": "Content-Type", "value": "application/json"},
-          {"key": "Authorization", "value": "Bearer maykel2_sync_token_secreto_2026"}
+          {"key": "Authorization", "value": "Bearer {{sync_token}}"}
         ],
         "body": {
           "mode": "raw",
@@ -123,7 +143,7 @@
       "request": {
         "method": "GET",
         "header": [
-          {"key": "Authorization", "value": "Basic YWRtaW46bWF5a2VsMjAyNg=="}
+          {"key": "Authorization", "value": "Bearer {{token}}"}
         ],
         "url": {
           "raw": "http://localhost:8080/api/admin/dashboard",

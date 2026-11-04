@@ -1,3 +1,5 @@
+-- Active: 1793756482913@@127.0.0.1@5432@maykel_repuestos2
+-- Active: 1763267482657@@127.0.0.1@5432@maykel_repuestos2
 -- ============================================================================
 -- PROYECTO DE TÍTULO: MAYKEL REPUESTOS 2 (CALAMA)
 -- Script DDL + Seed Data Unificado (3NF + Compatibilidad Frontend/Admin)

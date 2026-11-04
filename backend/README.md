@@ -13,10 +13,10 @@ guarda todo en **PostgreSQL**. También sirve la app Flutter ya compilada
 
 ```bash
 # Crea la base (te pedirá la clave del usuario postgres)
-createdb -U postgres maykel_repuestos_db
+createdb -U postgres maykel_repuestos2_db
 
 # Crea las tablas y carga los datos de ejemplo
-psql -U postgres -d maykel_repuestos_db -f database/schema.sql
+psql -U postgres -d maykel_repuestos2_db -f database/schema.sql
 ```
 
 En Windows también puedes abrir `database/schema.sql` en pgAdmin y

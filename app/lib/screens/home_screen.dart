@@ -502,20 +502,9 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Row(
           children: [
             ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: Image.asset('assets/images/logo.jpg', width: 38, height: 38, fit: BoxFit.cover),
-            ),
-            const SizedBox(width: 12),
-            Flexible(
-              child: Text(
-                SiteContent.actual.nombreNegocio,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 0.6,
-                ),
-              ),
+              borderRadius: BorderRadius.circular(8),
+              child: Image.asset('assets/images/logo_maykel.jpg',
+                  height: esAngosto ? 38 : 46, fit: BoxFit.contain),
             ),
             const Spacer(),
             if (!esAngosto) ...[
@@ -1244,12 +1233,9 @@ class _HomeScreenState extends State<HomeScreen> {
           Row(
             children: [
               ClipRRect(
-                borderRadius: BorderRadius.circular(6),
-                child: Image.asset('assets/images/logo.jpg', width: 26, height: 26, fit: BoxFit.cover),
+                borderRadius: BorderRadius.circular(8),
+                child: Image.asset('assets/images/logo_maykel.jpg', height: 56, fit: BoxFit.contain),
               ),
-              const SizedBox(width: 8),
-              Text(SiteContent.actual.nombreNegocio,
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
             ],
           ),
           const SizedBox(height: 10),

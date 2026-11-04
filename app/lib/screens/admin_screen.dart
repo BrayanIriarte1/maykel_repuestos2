@@ -76,6 +76,8 @@ class _AdminScreenState extends State<AdminScreen> {
   bool _guardandoStock = false;
 
   String _busquedaCatalogo = '';
+  int _paginaCatalogo = 0;
+  static const _filasCatalogo = 25;
 
   // Contenido editable del sitio (Configuración): copia local que se edita
   // y solo se manda al backend cuando el usuario presiona "Guardar".
@@ -395,19 +397,11 @@ class _AdminScreenState extends State<AdminScreen> {
             padding: const EdgeInsets.fromLTRB(18, 22, 18, 18),
             child: Row(
               children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.asset('assets/images/logo.jpg',
-                      width: 38, height: 38, fit: BoxFit.cover),
-                ),
-                const SizedBox(width: 10),
-                const Expanded(
-                  child: Text('MAYKEL\nREPUESTOS',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 13,
-                          height: 1.15)),
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.asset('assets/images/logo_maykel.jpg', fit: BoxFit.contain),
+                  ),
                 ),
               ],
             ),
@@ -1044,6 +1038,9 @@ class _AdminScreenState extends State<AdminScreen> {
             p.marca.toLowerCase().contains(termino) ||
             p.sku.toLowerCase().contains(termino))
         .toList();
+    final paginas = (filtrados.length / _filasCatalogo).ceil().clamp(1, 100000);
+    final pagina = _paginaCatalogo.clamp(0, paginas - 1);
+    final visibles = filtrados.skip(pagina * _filasCatalogo).take(_filasCatalogo).toList();
 
     return Padding(
       padding: const EdgeInsets.all(24),
@@ -1055,9 +1052,34 @@ class _AdminScreenState extends State<AdminScreen> {
               prefixIcon: Icon(Icons.search),
               hintText: 'Buscar por nombre, marca o SKU...',
             ),
-            onChanged: (v) => setState(() => _busquedaCatalogo = v),
+            onChanged: (v) => setState(() {
+              _busquedaCatalogo = v;
+              _paginaCatalogo = 0;
+            }),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Text('${filtrados.length} productos',
+                  style: const TextStyle(color: AppColors.steel, fontSize: 12.5)),
+              const Spacer(),
+              IconButton(
+                tooltip: 'Anterior',
+                onPressed: pagina > 0 ? () => setState(() => _paginaCatalogo = pagina - 1) : null,
+                icon: const Icon(Icons.chevron_left),
+              ),
+              Text('Página ${pagina + 1} de $paginas',
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+              IconButton(
+                tooltip: 'Siguiente',
+                onPressed: pagina < paginas - 1
+                    ? () => setState(() => _paginaCatalogo = pagina + 1)
+                    : null,
+                icon: const Icon(Icons.chevron_right),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
           Expanded(
             child: Container(
               decoration: BoxDecoration(
@@ -1065,29 +1087,34 @@ class _AdminScreenState extends State<AdminScreen> {
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: AppColors.paper2),
               ),
-              child: SingleChildScrollView(
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: DataTable(
-                    columns: const [
-                      DataColumn(label: Text('SKU')),
-                      DataColumn(label: Text('Nombre')),
-                      DataColumn(label: Text('Categoría')),
-                      DataColumn(label: Text('Marca / Modelo')),
-                      DataColumn(label: Text('Precio')),
-                      DataColumn(label: Text('Stock')),
-                    ],
-                    rows: filtrados
-                        .map((p) => DataRow(cells: [
-                              DataCell(Text(p.sku,
-                                  style: const TextStyle(fontFamily: 'monospace', fontSize: 12))),
-                              DataCell(Text(p.nombre)),
-                              DataCell(Text(p.categoria)),
-                              DataCell(Text(p.modelo.isNotEmpty ? '${p.marca} · ${p.modelo}' : p.marca)),
-                              DataCell(Text(formatCLP(p.precio))),
-                              DataCell(Text('${p.stock}')),
-                            ]))
-                        .toList(),
+              child: LayoutBuilder(
+                builder: (context, c) => SingleChildScrollView(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(minWidth: c.maxWidth),
+                      child: DataTable(
+                        columns: const [
+                          DataColumn(label: Text('SKU')),
+                          DataColumn(label: Text('Nombre')),
+                          DataColumn(label: Text('Categoría')),
+                          DataColumn(label: Text('Marca / Modelo')),
+                          DataColumn(label: Text('Precio')),
+                          DataColumn(label: Text('Stock')),
+                        ],
+                        rows: visibles
+                            .map((p) => DataRow(cells: [
+                                  DataCell(Text(p.sku,
+                                      style: const TextStyle(fontFamily: 'monospace', fontSize: 12))),
+                                  DataCell(Text(p.nombre)),
+                                  DataCell(Text(p.categoria)),
+                                  DataCell(Text(p.modelo.isNotEmpty ? '${p.marca} · ${p.modelo}' : p.marca)),
+                                  DataCell(Text(formatCLP(p.precio))),
+                                  DataCell(Text('${p.stock}')),
+                                ]))
+                            .toList(),
+                      ),
+                    ),
                   ),
                 ),
               ),

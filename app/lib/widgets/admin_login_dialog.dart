@@ -24,6 +24,7 @@ class _AdminLoginDialogState extends State<_AdminLoginDialog> {
   final _passwordCtrl = TextEditingController();
   bool _verificando = false;
   bool _error = false;
+  String? _mensajeError;
 
   @override
   void dispose() {
@@ -44,7 +45,18 @@ class _AdminLoginDialogState extends State<_AdminLoginDialog> {
       _error = false;
     });
 
-    final ok = await ApiService.instance.loginAdmin(usuario, password);
+    bool ok = false;
+    try {
+      ok = await ApiService.instance.loginAdmin(usuario, password);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _verificando = false;
+        _error = true;
+        _mensajeError = e.mensaje;
+      });
+      return;
+    }
 
     if (!mounted) return;
     setState(() => _verificando = false);
@@ -52,7 +64,10 @@ class _AdminLoginDialogState extends State<_AdminLoginDialog> {
     if (ok) {
       Navigator.of(context).pop(true);
     } else {
-      setState(() => _error = true);
+      setState(() {
+        _error = true;
+        _mensajeError = null;
+      });
     }
   }
 
@@ -101,7 +116,7 @@ class _AdminLoginDialogState extends State<_AdminLoginDialog> {
               if (_error) ...[
                 const SizedBox(height: 10),
                 Text(
-                  'Usuario o contraseña incorrectos.',
+                  _mensajeError ?? 'Usuario o contraseña incorrectos.',
                   style: TextStyle(color: AppColors.bad, fontSize: 12.5),
                 ),
               ],

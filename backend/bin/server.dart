@@ -6,9 +6,6 @@
 
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math';
-
-import 'package:crypto/crypto.dart';
 
 import 'package:path/path.dart' as p;
 import 'package:postgres/postgres.dart';
@@ -20,6 +17,7 @@ import 'package:shelf_static/shelf_static.dart';
 
 import '../lib/db.dart';
 import '../lib/notificador.dart';
+import '../lib/seguridad.dart';
 
 final db = DatabaseService();
 
@@ -63,25 +61,43 @@ num _numDe(dynamic v, [num porDefecto = 0]) {
   return num.tryParse(v.toString()) ?? porDefecto;
 }
 
-// ---------- Contraseñas (hash SHA-256 con sal) ----------
+// ---------- Contraseñas (bcrypt, ver lib/seguridad.dart) ----------
 
-/// Genera el hash a guardar en `usuarios.password_hash`: `sha256$<sal>$<hash>`.
-String hashPassword(String password, {String? sal}) {
-  final rnd = Random.secure();
-  final s = sal ??
-      List.generate(12, (_) => rnd.nextInt(16).toRadixString(16)).join();
-  final digest = sha256.convert(utf8.encode('$s$password')).toString();
-  return 'sha256\$$s\$$digest';
+/// Hash a guardar en `usuarios.password_hash` (bcrypt, costo 10).
+String hashPassword(String password) => hashBcrypt(password);
+
+/// Compara una contraseña con el hash guardado (bcrypt, sha256 antiguo o texto plano).
+bool verificarPassword(String password, String guardado) =>
+    verificarClave(password, guardado);
+
+late final Jwt jwt;
+final limitadorLogin = LimitadorIntentos();
+
+Future<void> _auditar(String? usuario, String ruta, String metodo,
+    String resultado, String? ip) async {
+  try {
+    await db.conn.execute(
+      Sql.named('''
+        INSERT INTO logs_auditoria (usuario_email, ruta_accedida, metodo_http, resultado, ip_origen)
+        VALUES (@u, @r, @m, @res, @ip)
+      '''),
+      parameters: {
+        'u': usuario,
+        'r': ruta.length > 150 ? ruta.substring(0, 150) : ruta,
+        'm': metodo,
+        'res': resultado,
+        'ip': ip,
+      },
+    );
+  } catch (e) {
+    print('⚠️ No se pudo registrar auditoría: $e');
+  }
 }
 
-/// Compara una contraseña con el hash guardado. Acepta también contraseñas
-/// antiguas guardadas en texto plano para no bloquear bases ya creadas.
-bool verificarPassword(String password, String guardado) {
-  final partes = guardado.split('\$');
-  if (partes.length == 3 && partes[0] == 'sha256') {
-    return hashPassword(password, sal: partes[1]) == guardado;
-  }
-  return password == guardado;
+String? _ipDe(Request req) {
+  final info = req.context['shelf.io.connection_info'];
+  if (info is HttpConnectionInfo) return info.remoteAddress.address;
+  return null;
 }
 
 /// Permiso que exige cada grupo de rutas /api/admin/<grupo>.
@@ -206,26 +222,17 @@ Map<String, dynamic> contenidoPorDefecto() {
 
 // ---------- Autenticación y Control de Acceso Basado en Roles (RBAC - RNF03) ----------
 
-Future<Map<String, dynamic>?> _autenticar(Request request) async {
-  final authHeader = request.headers['authorization'];
-  if (authHeader == null || !authHeader.startsWith('Basic ')) return null;
-
+/// Valida usuario/clave contra ADMIN_USERS o la tabla usuarios y devuelve la sesión.
+Future<Map<String, dynamic>?> _validarCredenciales(
+    String usuarioInput, String passwordInput) async {
   try {
-    final credenciales =
-        utf8.decode(base64.decode(authHeader.substring(6).trim()));
-    final separador = credenciales.indexOf(':');
-    if (separador < 0) return null;
-    final usuarioInput = credenciales.substring(0, separador).trim();
-    final passwordInput = credenciales.substring(separador + 1).trim();
-
-    // 1. Acceso inmediato para SuperAdmin maestro (evita bloqueos si la tabla roles aún no se migra)
-    // Solo se usa si se define ADMIN_USERS (usuario:clave,usuario2:clave2).
+    // Usuarios de emergencia opcionales: ADMIN_USERS=usuario:clave,usuario2:clave2
     final envAdmins = db.env['ADMIN_USERS'] ?? '';
     for (final par in envAdmins.split(',')) {
       final partes = par.split(':');
       if (partes.length >= 2 &&
           partes[0].trim() == usuarioInput &&
-          partes.sublist(1).join(':').trim() == passwordInput) {
+          tokensIguales(partes.sublist(1).join(':').trim(), passwordInput)) {
         return {
           'usuario': usuarioInput,
           'permisos': permisosDisponibles,
@@ -235,7 +242,6 @@ Future<Map<String, dynamic>?> _autenticar(Request request) async {
       }
     }
 
-    // 2. Verificación en Base de Datos PostgreSQL (Tabla usuarios + roles)
     final rows = await db.conn.execute(
       Sql.named('''
         SELECT u.usuario, u.nombre, u.rol, u.activo, r.nombre AS rol_nombre, r.permisos, u.password_hash
@@ -250,6 +256,14 @@ Future<Map<String, dynamic>?> _autenticar(Request request) async {
     if (rows.isNotEmpty &&
         verificarPassword(passwordInput, rows.first[6] as String)) {
       final r = rows.first;
+      final guardado = r[6] as String;
+      // Migración transparente a bcrypt al iniciar sesión.
+      if (!esBcrypt(guardado)) {
+        await db.conn.execute(
+          Sql.named('UPDATE usuarios SET password_hash = @h WHERE usuario = @u'),
+          parameters: {'h': hashPassword(passwordInput), 'u': r[0]},
+        );
+      }
       final rolSistema = r[2] as String;
       final rawPermisos = r[5];
       List<String> permisos = permisosDisponibles;
@@ -269,9 +283,23 @@ Future<Map<String, dynamic>?> _autenticar(Request request) async {
     }
   } catch (e) {
     print('⚠️ Aviso en autenticación: $e');
-    return null;
   }
   return null;
+}
+
+/// Lee la sesión desde `Authorization: Bearer <jwt>`.
+Map<String, dynamic>? _sesionDesdeToken(Request request) {
+  final authHeader = request.headers['authorization'];
+  if (authHeader == null || !authHeader.startsWith('Bearer ')) return null;
+  final datos = jwt.verificar(authHeader.substring(7).trim());
+  if (datos == null) return null;
+  return {
+    'usuario': datos['usuario'],
+    'nombre': datos['nombre'],
+    'permisos': datos['permisos'] ?? <String>[],
+    'esSuperAdmin': datos['esSuperAdmin'] == true,
+    'rolNombre': datos['rolNombre'],
+  };
 }
 
 Middleware _authSoloAdmin() {
@@ -289,16 +317,18 @@ Middleware _authSoloAdmin() {
       }
 
       if (request.url.path.startsWith('api/admin/')) {
-        final sesion = await _autenticar(request);
+        final sesion = _sesionDesdeToken(request);
+        final grupo = request.url.pathSegments.length > 2
+            ? request.url.pathSegments[2]
+            : '';
         if (sesion != null) {
-          final grupo = request.url.pathSegments.length > 2
-              ? request.url.pathSegments[2]
-              : '';
           final requerido = permisoPorRuta[grupo];
           final permisos = (sesion['permisos'] as List).cast<String>();
           if (requerido != null &&
               sesion['esSuperAdmin'] != true &&
               !permisos.contains(requerido)) {
+            await _auditar(sesion['usuario']?.toString(), '/${request.url.path}',
+                request.method, 'DENEGADO_403', _ipDe(request));
             return Response(
               403,
               body: jsonEncode({'error': 'Tu rol no tiene permiso para esta sección.'}),
@@ -312,10 +342,12 @@ Middleware _authSoloAdmin() {
           return innerHandler(actualizado);
         }
 
+        await _auditar(null, '/${request.url.path}', request.method,
+            'NO_AUTENTICADO_401', _ipDe(request));
         return Response(
           401,
           body: jsonEncode({
-            'error': 'Usuario o contraseña incorrectos.'
+            'error': 'Sesión no válida o expirada. Inicia sesión nuevamente.'
           }),
           headers: {
             'content-type': 'application/json; charset=utf-8',
@@ -331,7 +363,53 @@ Middleware _authSoloAdmin() {
 void main(List<String> args) async {
   await db.init();
 
+  final secreto = db.env['JWT_SECRET'];
+  if (secreto == null || secreto.length < 16) {
+    print('⚠️ JWT_SECRET no definido (o menor a 16 caracteres): se usa uno '
+        'aleatorio y las sesiones se cerrarán al reiniciar el servidor.');
+  }
+  jwt = Jwt(
+    (secreto != null && secreto.length >= 16) ? secreto : Jwt.secretoAleatorio(),
+    duracion: Duration(hours: int.tryParse(db.env['JWT_HORAS'] ?? '') ?? 8),
+  );
+  if ((db.env['SYNC_API_TOKEN'] ?? '').isEmpty) {
+    print('⚠️ SYNC_API_TOKEN no definido: la sincronización de inventario '
+        'queda deshabilitada.');
+  }
+
   final router = Router();
+
+  router.post('/api/auth/login', (Request req) async {
+    final body = await _leerJsonBody(req);
+    final usuario = (body?['usuario'] ?? '').toString().trim();
+    final password = (body?['password'] ?? '').toString();
+    if (usuario.isEmpty || password.isEmpty) {
+      return _errorResponse('Debes ingresar usuario y contraseña.');
+    }
+    final ip = _ipDe(req) ?? 'desconocida';
+    final clave = '${usuario.toLowerCase()}|$ip';
+    if (limitadorLogin.bloqueado(clave)) {
+      await _auditar(usuario, '/api/auth/login', 'POST', 'BLOQUEADO_429', ip);
+      return _jsonResponse({
+        'error': 'Demasiados intentos fallidos. Espera 15 minutos e inténtalo de nuevo.'
+      }, status: 429);
+    }
+    final sesion = await _validarCredenciales(usuario, password);
+    if (sesion == null) {
+      limitadorLogin.registrarFallo(clave);
+      await _auditar(usuario, '/api/auth/login', 'POST', 'LOGIN_FALLIDO', ip);
+      return _jsonResponse(
+          {'error': 'Usuario o contraseña incorrectos.'}, status: 401);
+    }
+    limitadorLogin.reiniciar(clave);
+    await _auditar(usuario, '/api/auth/login', 'POST', 'LOGIN_OK', ip);
+    return _jsonResponse({
+      'token': jwt.emitir(sesion),
+      'tipo': 'Bearer',
+      'expira_en_segundos': jwt.duracion.inSeconds,
+      ...sesion,
+    });
+  });
 
   // ==========================================================================
   // 1. HEALTHCHECK, ESTADO Y CONTENIDO DEL SITIO (RNF04 + Frontend Compañera)
@@ -1211,10 +1289,14 @@ void main(List<String> args) async {
   router.post('/api/v1/sync/inventory', (Request req) async {
     final tokenHeader =
         req.headers['authorization']?.replaceFirst('Bearer ', '');
-    final expectedToken =
-        db.env['SYNC_API_TOKEN'] ?? 'maykel2_sync_token_secreto_2026';
+    final expectedToken = db.env['SYNC_API_TOKEN'] ?? '';
+    if (expectedToken.isEmpty) {
+      return _jsonResponse(
+          {'error': 'Sincronización deshabilitada: falta SYNC_API_TOKEN en el servidor.'},
+          status: 503);
+    }
 
-    if (tokenHeader != expectedToken) {
+    if (tokenHeader == null || !tokensIguales(tokenHeader, expectedToken)) {
       await db.conn.execute(
         '''
           INSERT INTO logs_sincronizacion (estado, mensaje_detalle)

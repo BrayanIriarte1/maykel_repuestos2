@@ -132,16 +132,19 @@ class ApiService {
   // ---------- Admin: sesión ----------
 
   Future<bool> loginAdmin(String usuario, String password) async {
-    final intento =
-        'Basic ${base64Encode(utf8.encode('$usuario:$password'))}';
-    final resp = await http.get(
-      _uri('/api/admin/verificar'),
-      headers: {'Authorization': intento},
+    final resp = await http.post(
+      _uri('/api/auth/login'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'usuario': usuario, 'password': password}),
     );
     if (resp.statusCode == 200) {
-      _authHeader = intento;
-      _sesion = SesionAdmin.fromJson(jsonDecode(resp.body) as Map<String, dynamic>);
+      final data = jsonDecode(resp.body) as Map<String, dynamic>;
+      _authHeader = 'Bearer ${data['token']}';
+      _sesion = SesionAdmin.fromJson(data);
       return true;
+    }
+    if (resp.statusCode == 429) {
+      throw ApiException(_mensajeError(resp) ?? 'Demasiados intentos.');
     }
     return false;
   }

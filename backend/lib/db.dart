@@ -22,6 +22,7 @@ class DatabaseService {
       'WHATSAPP_TOKEN', 'WHATSAPP_PHONE_ID', 'WHATSAPP_DESTINO',
       'WHATSAPP_API_VERSION', 'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER',
       'SMTP_PASS', 'SMTP_SSL', 'SMTP_FROM', 'EMAIL_DESTINO',
+      'JWT_SECRET', 'JWT_HORAS',
     ]) {
       final valor = Platform.environment[clave] ?? archivoEnv[clave];
       if (valor != null && valor.isNotEmpty) env[clave] = valor;

@@ -7,6 +7,8 @@ import 'package:http/http.dart' as http;
 import 'package:mailer/mailer.dart';
 import 'package:mailer/smtp_server.dart';
 
+import 'pdf_reserva.dart';
+
 class ResultadoNotificacion {
   final bool whatsapp;
   final bool email;
@@ -66,7 +68,8 @@ class Notificador {
     return resp.statusCode >= 200 && resp.statusCode < 300;
   }
 
-  Future<bool> _enviarEmail(String asunto, String texto) async {
+  Future<bool> _enviarEmail(String asunto, String texto,
+      {List<int>? pdf, String? nombrePdf}) async {
     if (!smtpConfigurado) return false;
     final servidor = SmtpServer(
       env['SMTP_HOST']!,
@@ -81,6 +84,11 @@ class Notificador {
           env['EMAIL_DESTINO']!.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty))
       ..subject = asunto
       ..text = texto;
+    if (pdf != null) {
+      mensaje.attachments.add(StreamAttachment(
+          Stream.value(pdf), 'application/pdf',
+          fileName: nombrePdf ?? 'reserva.pdf'));
+    }
     await send(mensaje, servidor).timeout(const Duration(seconds: 4));
     return true;
   }
@@ -97,7 +105,9 @@ class Notificador {
       print('⚠️ WhatsApp falló (${reserva['folio']}): $e');
     }
     try {
-      okMail = await _enviarEmail('Nueva reserva ${reserva['folio']}', texto);
+      final pdf = await generarPdfReserva(reserva, lineas);
+      okMail = await _enviarEmail('Nueva reserva ${reserva['folio']}', texto,
+          pdf: pdf, nombrePdf: '${reserva['folio']}.pdf');
     } catch (e) {
       print('⚠️ SMTP falló (${reserva['folio']}): $e');
     }

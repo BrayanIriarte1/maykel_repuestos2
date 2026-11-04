@@ -6,11 +6,11 @@ info:
     API del catálogo público y del panel de administración de Maykel Repuestos 2 (Calama).
 
     - **Rutas públicas**: catálogo (sin precios), taxonomía vehicular, reservas y contenido del sitio.
-    - **Rutas `/api/admin/*`**: requieren autenticación **Basic** (usuario y contraseña del panel).
+    - **Rutas `/api/admin/*`**: requieren un **token JWT** (`Authorization: Bearer <token>`) obtenido en `POST /api/auth/login`.
       Las rutas de `roles` y `usuarios` exigen además el permiso `usuarios`.
     - **Sincronización de bodega**: `/api/v1/sync/inventory` usa un token **Bearer** (`SYNC_API_TOKEN`).
 
-    Para probar rutas protegidas, pulsa **Authorize** e ingresa tus credenciales.
+    Para probar rutas protegidas: ejecuta `POST /api/auth/login`, copia el `token` y pulsa **Authorize**.
 servers:
   - url: /
     description: Mismo servidor que sirve esta documentación
@@ -263,10 +263,52 @@ paths:
                 $ref: '#/components/schemas/Reserva'
         '400':
           $ref: '#/components/responses/Error'
+  /api/auth/login:
+    post:
+      tags: [Admin - Sesión]
+      summary: Inicia sesión y devuelve un token JWT
+      description: Tras 5 intentos fallidos desde la misma IP y usuario se bloquea 15 minutos (429).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [usuario, password]
+              properties:
+                usuario: {type: string, example: admin}
+                password: {type: string, format: password}
+      responses:
+        '200':
+          description: Sesión iniciada
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SesionAdmin'
+                  - type: object
+                    properties:
+                      token: {type: string}
+                      tipo: {type: string, example: Bearer}
+                      expira_en_segundos: {type: integer, example: 28800}
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          description: Usuario o contraseña incorrectos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: Demasiados intentos fallidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
   /api/admin/verificar:
     get:
       tags: [Admin - Sesión]
-      summary: Valida credenciales y devuelve permisos
+      summary: Valida el token y devuelve permisos
       security: [{basicAuth: []}]
       responses:
         '200':
@@ -724,12 +766,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorBody'
+        '503':
+          description: Sincronización deshabilitada (falta SYNC_API_TOKEN en el servidor)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
 components:
   securitySchemes:
     basicAuth:
       type: http
-      scheme: basic
-      description: Usuario y contraseña del panel de administración
+      scheme: bearer
+      bearerFormat: JWT
+      description: >-
+        Token JWT obtenido en POST /api/auth/login (pega solo el token). Expira según JWT_HORAS
+        (8 h por defecto). El identificador "basicAuth" es histórico: ya no se acepta autenticación Basic.
     bearerAuth:
       type: http
       scheme: bearer

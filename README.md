@@ -53,6 +53,10 @@ instalación y ejecución:
 - [`backend/README.md`](backend/README.md)
 - [`app/README.md`](app/README.md)
 
+Documentación del proyecto en [`docs/`](docs/): [manual de usuario](docs/MANUAL_USUARIO.md),
+[despliegue en producción](docs/DESPLIEGUE.md) y
+[estado del proyecto y trazabilidad](docs/ESTADO_PROYECTO.md).
+
 ## Inicio rápido
 
 Necesitas [Flutter](https://docs.flutter.dev/get-started/install) (incluye
@@ -60,8 +64,8 @@ Dart) y [PostgreSQL](https://www.postgresql.org/download/).
 
 ```bash
 # 1. Base de datos: crea la base y carga tablas + datos de ejemplo
-createdb -U postgres maykel_repuestos_db
-psql -U postgres -d maykel_repuestos_db -f backend/database/schema.sql
+createdb -U postgres maykel_repuestos2
+psql -U postgres -d maykel_repuestos2 -f backend/database/schema.sql
 
 # 2. Compila la app Flutter
 cd app
@@ -70,7 +74,7 @@ flutter build web --no-web-resources-cdn
 
 # 3. Configura y corre el backend (sirve la API y la app, todo en un puerto)
 cd ../backend
-cp .env.example .env      # y pon tu clave de PostgreSQL en DB_PASS
+cp .env.example .env      # pon tu clave de PostgreSQL en DB_PASS y define JWT_SECRET y SYNC_API_TOKEN
 dart pub get
 dart run bin/server.dart
 ```

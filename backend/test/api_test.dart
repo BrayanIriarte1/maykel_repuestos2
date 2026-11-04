@@ -22,21 +22,32 @@ String _tokenDeEnv() {
       }
     }
   }
-  return 'maykel2_sync_token_secreto_2026';
+  return '';
 }
 
-final adminHeaders = {
-  'Authorization': 'Basic ${base64Encode(utf8.encode('$adminUser:$adminPass'))}',
-  'Content-Type': 'application/json',
-};
+late Map<String, String> adminHeaders;
 
-Uri u(String path) => Uri.parse('$base$path');
+Uri u(String path) => Uri.parse(base + path);
+
+Map<String, String> conToken(String token) =>
+    {'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'};
+
+Future<http.Response> login(String usuario, String password) => http.post(
+      u('/api/auth/login'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'usuario': usuario, 'password': password}),
+    );
 
 void main() {
+  setUpAll(() async {
+    final r = await login(adminUser, adminPass);
+    expect(r.statusCode, 200, reason: 'No se pudo iniciar sesión de prueba');
+    adminHeaders = conToken(jsonDecode(r.body)['token'].toString());
+  });
+
   group('Públicas', () {
     test('health responde 200', () async {
-      final r = await http.get(u('/api/health'));
-      expect(r.statusCode, 200);
+      expect((await http.get(u('/api/health'))).statusCode, 200);
     });
 
     test('catálogo devuelve lista y oculta precios (RF01)', () async {
@@ -112,9 +123,31 @@ void main() {
       });
     }
 
-    test('credenciales erróneas → 401', () async {
+    test('login con clave incorrecta → 401', () async {
+      expect((await login('admin', 'incorrecta')).statusCode, 401);
+    });
+
+    test('login devuelve JWT de 3 partes', () async {
+      final r = await login(adminUser, adminPass);
+      expect(r.statusCode, 200);
+      final token = jsonDecode(r.body)['token'].toString();
+      expect(token.split('.').length, 3);
+    });
+
+    test('token falso o manipulado → 401', () async {
+      final falso = await http.get(u('/api/admin/dashboard'),
+          headers: conToken('aaa.bbb.ccc'));
+      expect(falso.statusCode, 401);
+      final valido = adminHeaders['Authorization']!.substring(7);
+      final alterado = await http.get(u('/api/admin/dashboard'),
+          headers: conToken(valido + 'x'));
+      expect(alterado.statusCode, 401);
+    });
+
+    test('Basic ya no es aceptado', () async {
       final r = await http.get(u('/api/admin/dashboard'), headers: {
-        'Authorization': 'Basic ${base64Encode(utf8.encode('admin:incorrecta'))}'
+        'Authorization':
+            'Basic ' + base64Encode(utf8.encode('$adminUser:$adminPass'))
       });
       expect(r.statusCode, 401);
     });
@@ -124,12 +157,17 @@ void main() {
       expect(r.statusCode, 200);
     });
 
+    test('vendedor no accede a usuarios (403)', () async {
+      final l = await login('vendedor', 'ventas2026');
+      if (l.statusCode != 200) return; // clave del vendedor ya cambiada
+      final r = await http.get(u('/api/admin/usuarios'),
+          headers: conToken(jsonDecode(l.body)['token'].toString()));
+      expect(r.statusCode, 403);
+    });
+
     test('sync con token inválido → 401', () async {
       final r = await http.post(u('/api/v1/sync/inventory'),
-          headers: {
-            'Authorization': 'Bearer token-falso',
-            'Content-Type': 'application/json'
-          },
+          headers: conToken('token-falso'),
           body: jsonEncode({'productos': []}));
       expect(r.statusCode, 401);
     });
@@ -141,10 +179,7 @@ void main() {
       const sku = 'TEST-SYNC-001';
       Future<http.Response> sync(int stock) => http.post(
             u('/api/v1/sync/inventory'),
-            headers: {
-              'Authorization': 'Bearer $syncToken',
-              'Content-Type': 'application/json'
-            },
+            headers: conToken(syncToken),
             body: jsonEncode({
               'productos': [
                 {

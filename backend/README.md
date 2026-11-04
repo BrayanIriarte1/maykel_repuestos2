@@ -13,14 +13,14 @@ guarda todo en **PostgreSQL**. También sirve la app Flutter ya compilada
 
 ```bash
 # Crea la base (te pedirá la clave del usuario postgres)
-createdb -U postgres maykel_repuestos2_db
+createdb -U postgres maykel_repuestos2
 
 # Crea las tablas y carga los datos de ejemplo
-psql -U postgres -d maykel_repuestos2_db -f database/schema.sql
+psql -U postgres -d maykel_repuestos2 -f database/schema.sql
 ```
 
 En Windows también puedes abrir `database/schema.sql` en pgAdmin y
-ejecutarlo con la base `maykel_repuestos_db` seleccionada.
+ejecutarlo con la base `maykel_repuestos2` seleccionada.
 
 > Ojo: `schema.sql` borra y vuelve a crear todas las tablas. Úsalo solo
 > para instalar desde cero o reiniciar los datos de demostración.
@@ -52,8 +52,10 @@ Verás `✅ Conectado exitosamente a PostgreSQL` y luego la URL del servidor
 | `daniel`   | `maykel2026`| Superadministrador  |
 | `vendedor` | `ventas2026`| Vendedor            |
 
-Las contraseñas se guardan como hash SHA-256 con sal (`sha256$<sal>$<hash>`).
-Cámbialas desde el panel (Usuarios) antes de usar el sistema en producción.
+Las contraseñas se guardan con **bcrypt** (costo 10). Los hashes antiguos
+(`sha256$...`) siguen funcionando y se convierten a bcrypt automáticamente en
+el primer inicio de sesión. Cámbialas desde el panel (Usuarios) antes de usar
+el sistema en producción.
 
 ## Tablas principales
 
@@ -71,8 +73,8 @@ Cámbialas desde el panel (Usuarios) antes de usar el sistema en producción.
 ## Documentación interactiva (Swagger)
 
 Con el servidor corriendo, abre `http://localhost:8080/api/docs`. Ahí puedes ver
-y probar todos los endpoints; para los de `/api/admin/*` pulsa **Authorize** e
-ingresa usuario y contraseña del panel. La especificación está en
+y probar todos los endpoints; para los de `/api/admin/*` ejecuta primero
+`POST /api/auth/login`, copia el `token` de la respuesta y pulsa **Authorize**. La especificación está en
 `docs/openapi.yaml` (y se sirve en `/api/docs/openapi.yaml`). La página carga
 Swagger UI desde un CDN, así que necesita internet. Si cambias o agregas un
 endpoint en `bin/server.dart`, actualiza también ese archivo.
@@ -88,8 +90,9 @@ Públicos:
 - `POST /api/reservas` — crea una reserva
 - `POST /api/metricas/agotado` — registra interés en un producto agotado
 
-Panel admin (autenticación básica, usuario y contraseña):
+Panel admin (token JWT en `Authorization: Bearer <token>`):
 
+- `POST /api/auth/login` — público; devuelve el token (bloqueo tras 5 intentos fallidos)
 - `GET /api/admin/verificar`
 - `GET /api/admin/dashboard`, `GET /api/admin/analytics`
 - `GET|POST|PUT /api/admin/repuestos`, `DELETE /api/admin/repuestos/<id>`
@@ -102,6 +105,42 @@ Panel admin (autenticación básica, usuario y contraseña):
 Sincronización de bodega:
 
 - `POST /api/v1/sync/inventory` con `Authorization: Bearer <SYNC_API_TOKEN>`
+
+## Seguridad (RNF03)
+
+- Sesión del panel con **JWT** (HS256) firmado con `JWT_SECRET` (obligatorio en producción) y duración `JWT_HORAS` (8 por defecto). Ya no se acepta autenticación Basic.
+- Contraseñas con **bcrypt** (costo 10).
+- Bloqueo de 15 minutos tras 5 intentos fallidos por usuario e IP.
+- Tabla `logs_auditoria`: registra `LOGIN_OK`, `LOGIN_FALLIDO`, `BLOQUEADO_429`, `NO_AUTENTICADO_401` y `DENEGADO_403`.
+- `SYNC_API_TOKEN` es obligatorio: sin él la sincronización responde 503 (ya no existe un token por defecto).
+- HTTPS/TLS: se configura en el proxy inverso (ver `../docs/DESPLIEGUE.md`).
+
+## Notificaciones de reservas (RF04)
+
+Al crearse una reserva se envían en segundo plano, sin demorar la respuesta al cliente:
+un **WhatsApp** (Meta Cloud API) y un **correo SMTP con el PDF adjunto** al equipo de ventas.
+Cada canal es independiente: si uno falla se registra y el otro se envía igual.
+Si no hay credenciales en `.env` no se envía nada (variables `WHATSAPP_*`, `SMTP_*`, `EMAIL_DESTINO` en `.env.example`).
+`reservas.notificado_whatsapp` y `notificado_email` reflejan lo realmente enviado.
+
+## Agente de sincronización de inventario (RF05)
+
+`tools/sync_agent.dart` lee un CSV exportado desde el POS o Excel (columnas `codigo_interno;nombre;stock`)
+y lo envía por HTTPS saliente a `/api/v1/sync/inventory`. Ver `tools/ejemplo_inventario.csv`.
+
+```bash
+dart run tools/sync_agent.dart --archivo C:\inventario\stock.csv --url https://tu-dominio.cl --token TU_TOKEN --cada 30
+dart run tools/sync_agent.dart --archivo tools/ejemplo_inventario.csv --simular   # solo valida
+```
+
+## Pruebas
+
+```bash
+dart test test/unit_test.dart   # unitarias (JWT, bcrypt, PDF): no necesitan servidor
+dart test test/api_test.dart    # integración: requiere el servidor corriendo en :8080
+```
+
+Si cambiaste las claves demo, define `TEST_ADMIN_USER` y `TEST_ADMIN_PASS`.
 
 La colección `Maykel_Repuestos_2_Postman_Collection.json` sirve para probar
 la API desde Postman.

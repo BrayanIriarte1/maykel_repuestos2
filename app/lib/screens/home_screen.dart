@@ -5,6 +5,8 @@ import '../api_service.dart';
 import '../config.dart';
 import '../models.dart';
 import '../widgets/admin_login_dialog.dart';
+import '../widgets/carrusel_productos.dart';
+import '../widgets/efectos.dart';
 import '../widgets/mapa_ubicacion.dart';
 import '../widgets/product_card.dart';
 import '../widgets/reserva_dialog.dart';
@@ -90,6 +92,12 @@ class _HomeScreenState extends State<HomeScreen> {
     }).toList();
   }
 
+  List<Repuesto> get _destacados =>
+      _productos.where((p) => p.stock > 3).take(10).toList();
+
+  List<Repuesto> get _ultimas =>
+      _productos.where((p) => p.stock > 0 && p.stock <= 3).toList();
+
   void _scrollA(GlobalKey key) {
     final ctx = key.currentContext;
     if (ctx != null) {
@@ -118,69 +126,111 @@ class _HomeScreenState extends State<HomeScreen> {
     final esAngosto = ancho < 760;
 
     return Scaffold(
-      body: SingleChildScrollView(
-        controller: _scrollController,
-        child: Column(
-          children: [
-            _buildNavbar(esAngosto),
-            _buildHero(esAngosto),
-            Container(key: _historiaKey, child: _buildHistoria(esAngosto)),
-            Container(key: _serviciosKey, child: _buildServicios(esAngosto)),
-            Container(key: _catalogoKey, child: _buildCatalogo(esAngosto)),
-            Container(key: _contactoKey, child: _buildContacto(esAngosto)),
-            _buildFooter(esAngosto),
-          ],
-        ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () =>
+            launchUrl(Uri.parse('https://wa.me/${SiteContent.actual.contactoWhatsapp}')),
+        backgroundColor: const Color(0xFF25D366),
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.chat_bubble_outline),
+        label: esAngosto ? const SizedBox.shrink() : const Text('Escríbenos'),
       ),
-    );
-  }
-
-  // ---------- Navbar ----------
-
-  Widget _buildNavbar(bool esAngosto) {
-    return Container(
-      color: AppColors.char,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-      child: Row(
+      body: Column(
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Image.asset('assets/images/logo.jpg', width: 34, height: 34, fit: BoxFit.cover),
-          ),
-          const SizedBox(width: 10),
-          Text(
-            SiteContent.actual.nombreNegocio,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.5,
+          _buildNavbar(esAngosto),
+          Expanded(
+            child: SingleChildScrollView(
+              controller: _scrollController,
+              child: Column(
+                children: [
+                  _buildHero(esAngosto),
+                  if (!_cargando && _error == null)
+                    SeccionCarrusel(
+                      kicker: 'Lo más buscado',
+                      titulo: 'Productos destacados',
+                      productos: _destacados,
+                      onReservar: _abrirReserva,
+                    ),
+                  Container(key: _historiaKey, child: _buildHistoria(esAngosto)),
+                  Container(key: _serviciosKey, child: _buildServicios(esAngosto)),
+                  if (!_cargando && _error == null)
+                    SeccionCarrusel(
+                      kicker: 'No te quedes sin ellos',
+                      titulo: 'Últimas unidades',
+                      productos: _ultimas,
+                      onReservar: _abrirReserva,
+                      oscuro: true,
+                    ),
+                  Container(key: _catalogoKey, child: _buildCatalogo(esAngosto)),
+                  Container(key: _contactoKey, child: _buildContacto(esAngosto)),
+                  _buildFooter(esAngosto),
+                ],
+              ),
             ),
-          ),
-          const Spacer(),
-          if (!esAngosto) ...[
-            _navLink('Historia', () => _scrollA(_historiaKey)),
-            _navLink('Servicios', () => _scrollA(_serviciosKey)),
-            _navLink('Catálogo', () => _scrollA(_catalogoKey)),
-            _navLink('Contacto', () => _scrollA(_contactoKey)),
-            const SizedBox(width: 12),
-          ],
-          TextButton.icon(
-            onPressed: _abrirAdmin,
-            icon: const Icon(Icons.lock_outline, size: 16, color: Colors.white70),
-            label: const Text('Admin', style: TextStyle(color: Colors.white70)),
           ),
         ],
       ),
     );
   }
 
+  double _padX(bool esAngosto) => esAngosto ? 20 : 60;
+
+  // ---------- Navbar ----------
+
+  Widget _buildNavbar(bool esAngosto) {
+    return Material(
+      color: AppColors.char,
+      elevation: 6,
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: esAngosto ? 16 : 40, vertical: 12),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: Image.asset('assets/images/logo.jpg', width: 38, height: 38, fit: BoxFit.cover),
+            ),
+            const SizedBox(width: 12),
+            Flexible(
+              child: Text(
+                SiteContent.actual.nombreNegocio,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.6,
+                ),
+              ),
+            ),
+            const Spacer(),
+            if (!esAngosto) ...[
+              _navLink('Historia', () => _scrollA(_historiaKey)),
+              _navLink('Servicios', () => _scrollA(_serviciosKey)),
+              _navLink('Catálogo', () => _scrollA(_catalogoKey)),
+              _navLink('Contacto', () => _scrollA(_contactoKey)),
+              const SizedBox(width: 12),
+            ],
+            OutlinedButton.icon(
+              onPressed: _abrirAdmin,
+              icon: const Icon(Icons.lock_outline, size: 16),
+              label: const Text('Admin'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.white,
+                side: const BorderSide(color: Colors.white30),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _navLink(String texto, VoidCallback onTap) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      child: InkWell(
-        onTap: onTap,
-        child: Text(texto,
-            style: const TextStyle(color: Colors.white, fontSize: 13.5)),
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: TextButton(
+        onPressed: onTap,
+        style: TextButton.styleFrom(foregroundColor: Colors.white70),
+        child: Text(texto, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
       ),
     );
   }
@@ -188,62 +238,138 @@ class _HomeScreenState extends State<HomeScreen> {
   // ---------- Hero ----------
 
   Widget _buildHero(bool esAngosto) {
+    final textos = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+          decoration: BoxDecoration(
+            color: AppColors.red.withOpacity(0.18),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: AppColors.red.withOpacity(0.5)),
+          ),
+          child: const Text('CALAMA · REGIÓN DE ANTOFAGASTA',
+              style: TextStyle(
+                  color: AppColors.yellow,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.2)),
+        ),
+        const SizedBox(height: 18),
+        Text(
+          SiteContent.actual.heroTitulo,
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: esAngosto ? 34 : 54,
+            fontWeight: FontWeight.w900,
+            height: 1.05,
+          ),
+        ),
+        const SizedBox(height: 18),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: Text(
+            SiteContent.actual.heroSubtitulo,
+            style: const TextStyle(color: Colors.white70, fontSize: 16, height: 1.55),
+          ),
+        ),
+        const SizedBox(height: 28),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            ElevatedButton.icon(
+              onPressed: () => _scrollA(_catalogoKey),
+              icon: const Icon(Icons.search, size: 18),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+              ),
+              label: Text(SiteContent.actual.heroBotonCatalogo),
+            ),
+            OutlinedButton(
+              onPressed: () => _scrollA(_contactoKey),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.white,
+                side: const BorderSide(color: Colors.white54),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+              ),
+              child: Text(SiteContent.actual.heroBotonContacto),
+            ),
+          ],
+        ),
+        const SizedBox(height: 36),
+        Wrap(
+          spacing: 14,
+          runSpacing: 14,
+          children: [
+            _statHero('${_productos.length}', SiteContent.actual.heroEstadisticaProductosEtiqueta),
+            _statHero(SiteContent.actual.heroEstadisticaMarcasValor,
+                SiteContent.actual.heroEstadisticaMarcasEtiqueta),
+            _statHero(SiteContent.actual.heroEstadisticaCategoriasValor,
+                SiteContent.actual.heroEstadisticaCategoriasEtiqueta),
+          ],
+        ),
+      ],
+    );
+
+    final destacados = _productos.where((p) => p.stock > 0).take(5).toList();
+    final carrusel = (!_cargando && destacados.isNotEmpty)
+        ? HeroCarrusel(productos: destacados, onReservar: _abrirReserva)
+        : const SizedBox.shrink();
+
     return Container(
       width: double.infinity,
-      color: AppColors.char2,
-      padding: EdgeInsets.symmetric(
-          horizontal: esAngosto ? 20 : 60, vertical: esAngosto ? 40 : 70),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      clipBehavior: Clip.hardEdge,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF1A1A1C), Color(0xFF2B1013), Color(0xFF1A1A1C)],
+        ),
+      ),
+      child: Stack(
         children: [
-          Text(
-            SiteContent.actual.heroTitulo,
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: esAngosto ? 32 : 48,
-              fontWeight: FontWeight.w900,
-              height: 1.1,
+          Positioned(
+            right: -120,
+            top: -120,
+            child: Container(
+              width: 380,
+              height: 380,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: AppColors.red.withOpacity(0.12),
+              ),
             ),
           ),
-          const SizedBox(height: 16),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 560),
-            child: Text(
-              SiteContent.actual.heroSubtitulo,
-              style: const TextStyle(color: Colors.white70, fontSize: 15, height: 1.5),
+          Positioned(
+            left: -80,
+            bottom: -140,
+            child: Container(
+              width: 300,
+              height: 300,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withOpacity(0.03),
+              ),
             ),
           ),
-          const SizedBox(height: 26),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              ElevatedButton(
-                onPressed: () => _scrollA(_catalogoKey),
-                child: Text(SiteContent.actual.heroBotonCatalogo),
-              ),
-              OutlinedButton(
-                onPressed: () => _scrollA(_contactoKey),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  side: const BorderSide(color: Colors.white54),
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                ),
-                child: Text(SiteContent.actual.heroBotonContacto),
-              ),
-            ],
-          ),
-          const SizedBox(height: 36),
-          Wrap(
-            spacing: 32,
-            runSpacing: 16,
-            children: [
-              _statHero('${_productos.length}', SiteContent.actual.heroEstadisticaProductosEtiqueta),
-              _statHero(SiteContent.actual.heroEstadisticaMarcasValor,
-                  SiteContent.actual.heroEstadisticaMarcasEtiqueta),
-              _statHero(SiteContent.actual.heroEstadisticaCategoriasValor,
-                  SiteContent.actual.heroEstadisticaCategoriasEtiqueta),
-            ],
+          Padding(
+            padding: EdgeInsets.symmetric(
+                horizontal: _padX(esAngosto), vertical: esAngosto ? 40 : 80),
+            child: Centrado(
+              child: esAngosto
+                  ? Column(children: [textos, const SizedBox(height: 32), carrusel])
+                  : Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(flex: 6, child: textos),
+                        const SizedBox(width: 48),
+                        Expanded(flex: 5, child: carrusel),
+                      ],
+                    ),
+            ),
           ),
         ],
       ),
@@ -251,85 +377,114 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _statHero(String numero, String etiqueta) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(numero,
-            style: const TextStyle(
-                color: AppColors.yellow, fontSize: 26, fontWeight: FontWeight.w900)),
-        Text(etiqueta, style: const TextStyle(color: Colors.white60, fontSize: 12)),
-      ],
-    );
-  }
-
-  // ---------- Historia ----------
-
-  Widget _buildHistoria(bool esAngosto) {
     return Container(
-      width: double.infinity,
-      color: AppColors.paper,
-      padding: EdgeInsets.symmetric(
-          horizontal: esAngosto ? 20 : 60, vertical: esAngosto ? 40 : 60),
-      child: Flex(
-        direction: esAngosto ? Axis.vertical : Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white12),
+      ),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(SiteContent.actual.historiaKicker,
-                    style: TextStyle(
-                        color: AppColors.red,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 12,
-                        letterSpacing: 1)),
-                const SizedBox(height: 10),
-                Text(
-                  SiteContent.actual.historiaTitulo,
-                  style: const TextStyle(
-                      fontSize: 24, fontWeight: FontWeight.w800, color: AppColors.char),
-                ),
-                const SizedBox(height: 14),
-                Text(
-                  SiteContent.actual.historiaTexto,
-                  style: TextStyle(color: AppColors.steel, fontSize: 14, height: 1.6),
-                ),
-              ],
-            ),
-          ),
-          if (!esAngosto) const SizedBox(width: 40),
-          if (esAngosto) const SizedBox(height: 24),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: SiteContent.actual.historiaFichas
-                  .map((f) => _filaFicha(f.etiqueta, f.valor))
-                  .toList(),
-            ),
-          ),
+          Text(numero,
+              style: const TextStyle(
+                  color: AppColors.yellow, fontSize: 28, fontWeight: FontWeight.w900)),
+          Text(etiqueta, style: const TextStyle(color: Colors.white60, fontSize: 12)),
         ],
       ),
     );
   }
 
-  Widget _filaFicha(String etiqueta, String valor) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
+  // ---------- Historia ----------
+
+  static const _iconosFicha = [
+    Icons.place_outlined,
+    Icons.storefront_outlined,
+    Icons.stars_outlined,
+    Icons.calendar_month_outlined,
+    Icons.support_agent_outlined,
+  ];
+
+  Widget _buildHistoria(bool esAngosto) {
+    final fichas = SiteContent.actual.historiaFichas;
+    return Container(
+      width: double.infinity,
+      color: Colors.white,
+      padding: EdgeInsets.symmetric(
+          horizontal: _padX(esAngosto), vertical: esAngosto ? 40 : 70),
+      child: Centrado(
+        child: Flex(
+          direction: esAngosto ? Axis.vertical : Axis.horizontal,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              flex: esAngosto ? 0 : 6,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TituloSeccion(
+                      kicker: SiteContent.actual.historiaKicker,
+                      titulo: SiteContent.actual.historiaTitulo),
+                  const SizedBox(height: 22),
+                  Text(
+                    SiteContent.actual.historiaTexto,
+                    style: const TextStyle(color: AppColors.steel, fontSize: 15, height: 1.75),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(width: esAngosto ? 0 : 48, height: esAngosto ? 28 : 0),
+            Expanded(
+              flex: esAngosto ? 0 : 5,
+              child: Column(
+                children: [
+                  for (var i = 0; i < fichas.length; i++)
+                    _filaFicha(_iconosFicha[i % _iconosFicha.length], fichas[i].etiqueta,
+                        fichas[i].valor),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _filaFicha(IconData icono, String etiqueta, String valor) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.paper,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.paper2),
+      ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(width: 4, height: 34, color: AppColors.red),
-          const SizedBox(width: 12),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppColors.red.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icono, color: AppColors.red, size: 22),
+          ),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(etiqueta,
-                    style: TextStyle(
-                        fontSize: 11, color: AppColors.steel, fontWeight: FontWeight.w700)),
+                Text(etiqueta.toUpperCase(),
+                    style: const TextStyle(
+                        fontSize: 10.5,
+                        letterSpacing: 0.8,
+                        color: AppColors.steel,
+                        fontWeight: FontWeight.w800)),
+                const SizedBox(height: 2),
                 Text(valor,
-                    style: const TextStyle(fontSize: 14, color: AppColors.char)),
+                    style: const TextStyle(
+                        fontSize: 14, color: AppColors.char, fontWeight: FontWeight.w600)),
               ],
             ),
           ),
@@ -340,60 +495,95 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // ---------- Servicios ----------
 
+  static const _iconosServicio = [
+    Icons.directions_car_filled_outlined,
+    Icons.engineering_outlined,
+    Icons.picture_as_pdf_outlined,
+    Icons.build_outlined,
+    Icons.local_shipping_outlined,
+    Icons.verified_outlined,
+  ];
+
   Widget _buildServicios(bool esAngosto) {
     final servicios = SiteContent.actual.servicios;
 
     return Container(
       width: double.infinity,
-      color: AppColors.char,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF1A1A1C), Color(0xFF242427)],
+        ),
+      ),
       padding: EdgeInsets.symmetric(
-          horizontal: esAngosto ? 20 : 60, vertical: esAngosto ? 40 : 60),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(SiteContent.actual.serviciosKicker,
-              style: TextStyle(
-                  color: AppColors.yellow,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 12,
-                  letterSpacing: 1)),
-          const SizedBox(height: 10),
-          Text(
-            SiteContent.actual.serviciosTitulo,
-            style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 24),
-          Wrap(
-            spacing: 18,
-            runSpacing: 18,
-            children: servicios
-                .map((s) => Container(
-                      width: esAngosto ? double.infinity : 260,
-                      padding: const EdgeInsets.all(18),
-                      decoration: BoxDecoration(
-                        color: AppColors.char2,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.white12),
+          horizontal: _padX(esAngosto), vertical: esAngosto ? 40 : 70),
+      child: Centrado(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TituloSeccion(
+                kicker: SiteContent.actual.serviciosKicker,
+                titulo: SiteContent.actual.serviciosTitulo,
+                oscuro: true),
+            const SizedBox(height: 32),
+            LayoutBuilder(builder: (context, c) {
+              final cols = esAngosto ? 1 : (c.maxWidth > 900 ? 4 : 2);
+              const gap = 18.0;
+              final w = (c.maxWidth - gap * (cols - 1)) / cols;
+              return Wrap(
+                spacing: gap,
+                runSpacing: gap,
+                children: [
+                  for (var i = 0; i < servicios.length; i++)
+                    SizedBox(
+                      width: w,
+                      child: HoverLift(
+                        builder: (context, hover) => AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          height: 190,
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: hover ? const Color(0xFF2E2E32) : AppColors.char2,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                                color: hover ? AppColors.red : Colors.white12),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: AppColors.red,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Icon(_iconosServicio[i % _iconosServicio.length],
+                                    color: Colors.white, size: 22),
+                              ),
+                              const SizedBox(height: 14),
+                              Text(servicios[i].titulo,
+                                  style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 15.5)),
+                              const SizedBox(height: 6),
+                              Expanded(
+                                child: Text(servicios[i].descripcion,
+                                    overflow: TextOverflow.fade,
+                                    style: const TextStyle(
+                                        color: Colors.white60, fontSize: 13, height: 1.5)),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Icon(Icons.check_circle, color: AppColors.red, size: 22),
-                          const SizedBox(height: 12),
-                          Text(s.titulo,
-                              style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 15)),
-                          const SizedBox(height: 6),
-                          Text(s.descripcion,
-                              style: const TextStyle(color: Colors.white60, fontSize: 12.5, height: 1.5)),
-                        ],
-                      ),
-                    ))
-                .toList(),
-          ),
-        ],
+                    ),
+                ],
+              );
+            }),
+          ],
+        ),
       ),
     );
   }
@@ -405,92 +595,107 @@ class _HomeScreenState extends State<HomeScreen> {
       width: double.infinity,
       color: AppColors.paper,
       padding: EdgeInsets.symmetric(
-          horizontal: esAngosto ? 20 : 60, vertical: esAngosto ? 40 : 60),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(SiteContent.actual.catalogoKicker,
-              style: TextStyle(
-                  color: AppColors.red,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 12,
-                  letterSpacing: 1)),
-          const SizedBox(height: 10),
-          Text(SiteContent.actual.catalogoTitulo,
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: AppColors.char)),
-          const SizedBox(height: 20),
-          TextField(
-            decoration: InputDecoration(
-              prefixIcon: const Icon(Icons.search),
-              hintText: SiteContent.actual.catalogoBusquedaHint,
-            ),
-            onChanged: (v) => setState(() => _busqueda = v),
-          ),
-          const SizedBox(height: 14),
-          if (!_cargando)
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: _categorias.map((c) {
-                final activo = c == _categoriaActiva;
-                return ChoiceChip(
-                  label: Text(c),
-                  selected: activo,
-                  selectedColor: AppColors.red,
-                  labelStyle: TextStyle(
-                    color: activo ? Colors.white : AppColors.char,
-                    fontSize: 12.5,
+          horizontal: _padX(esAngosto), vertical: esAngosto ? 40 : 70),
+      child: Centrado(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TituloSeccion(
+                kicker: SiteContent.actual.catalogoKicker,
+                titulo: SiteContent.actual.catalogoTitulo),
+            const SizedBox(height: 26),
+            Material(
+              elevation: 3,
+              shadowColor: Colors.black26,
+              borderRadius: BorderRadius.circular(30),
+              child: TextField(
+                decoration: InputDecoration(
+                  prefixIcon: const Icon(Icons.search, color: AppColors.red),
+                  hintText: SiteContent.actual.catalogoBusquedaHint,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(30),
+                    borderSide: BorderSide.none,
                   ),
-                  backgroundColor: Colors.white,
-                  onSelected: (_) => setState(() => _categoriaActiva = c),
+                ),
+                onChanged: (v) => setState(() => _busqueda = v),
+              ),
+            ),
+            const SizedBox(height: 16),
+            if (!_cargando)
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _categorias.map((c) {
+                  final activo = c == _categoriaActiva;
+                  return ChoiceChip(
+                    avatar: c == 'Todos'
+                        ? null
+                        : Icon(iconoCategoria(c),
+                            size: 16, color: activo ? Colors.white : AppColors.red),
+                    label: Text(c),
+                    selected: activo,
+                    showCheckmark: false,
+                    selectedColor: AppColors.red,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                      side: BorderSide(color: activo ? AppColors.red : AppColors.paper2),
+                    ),
+                    labelStyle: TextStyle(
+                      color: activo ? Colors.white : AppColors.char,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12.5,
+                    ),
+                    backgroundColor: Colors.white,
+                    onSelected: (_) => setState(() => _categoriaActiva = c),
+                  );
+                }).toList(),
+              ),
+            if (!_cargando && _error == null) ...[
+              const SizedBox(height: 14),
+              Text('${_filtrados.length} producto${_filtrados.length == 1 ? '' : 's'}',
+                  style: const TextStyle(color: AppColors.steel, fontSize: 12.5)),
+            ],
+            const SizedBox(height: 18),
+            if (_cargando)
+              const Center(
+                  child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 40),
+                child: CircularProgressIndicator(),
+              ))
+            else if (_error != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 30),
+                child: Text('No se pudo cargar el catálogo: $_error',
+                    style: const TextStyle(color: AppColors.bad)),
+              )
+            else if (_filtrados.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 30),
+                child: Text('No encontramos repuestos que coincidan con tu búsqueda.',
+                    style: TextStyle(color: AppColors.steel)),
+              )
+            else
+              LayoutBuilder(builder: (context, c) {
+                final cols = esAngosto ? 1 : (c.maxWidth / 270).floor().clamp(2, 6);
+                const gap = 18.0;
+                final w = (c.maxWidth - gap * (cols - 1)) / cols;
+                return Wrap(
+                  spacing: gap,
+                  runSpacing: gap,
+                  children: _filtrados
+                      .map((p) => SizedBox(
+                            width: w,
+                            child: ProductCard(
+                              producto: p,
+                              onReservar: () => _abrirReserva(p),
+                            ),
+                          ))
+                      .toList(),
                 );
-              }).toList(),
-            ),
-          const SizedBox(height: 24),
-          if (_cargando)
-            const Center(child: Padding(
-              padding: EdgeInsets.symmetric(vertical: 40),
-              child: CircularProgressIndicator(),
-            ))
-          else if (_error != null)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 30),
-              child: Text('No se pudo cargar el catálogo: $_error',
-                  style: TextStyle(color: AppColors.bad)),
-            )
-          else if (_filtrados.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 30),
-              child: Text('No encontramos repuestos que coincidan con tu búsqueda.',
-                  style: TextStyle(color: AppColors.steel)),
-            )
-          else if (esAngosto)
-            Column(
-              children: _filtrados
-                  .map((p) => Padding(
-                        padding: const EdgeInsets.only(bottom: 14),
-                        child: ProductCard(
-                          producto: p,
-                          onReservar: () => _abrirReserva(p),
-                        ),
-                      ))
-                  .toList(),
-            )
-          else
-            Wrap(
-              spacing: 16,
-              runSpacing: 16,
-              children: _filtrados
-                  .map((p) => SizedBox(
-                        width: 260,
-                        child: ProductCard(
-                          producto: p,
-                          onReservar: () => _abrirReserva(p),
-                        ),
-                      ))
-                  .toList(),
-            ),
-        ],
+              }),
+          ],
+        ),
       ),
     );
   }
@@ -498,78 +703,98 @@ class _HomeScreenState extends State<HomeScreen> {
   // ---------- Contacto ----------
 
   Widget _buildContacto(bool esAngosto) {
-    final tarjetas = <(String, String, VoidCallback?)>[
-      ('WhatsApp', '+${SiteContent.actual.contactoWhatsapp}',
+    final tarjetas = <(IconData, String, String, VoidCallback?)>[
+      (Icons.chat_outlined, 'WhatsApp', '+${SiteContent.actual.contactoWhatsapp}',
           () => launchUrl(Uri.parse('https://wa.me/${SiteContent.actual.contactoWhatsapp}'))),
-      ('Correo', SiteContent.actual.contactoEmail,
+      (Icons.mail_outline, 'Correo', SiteContent.actual.contactoEmail,
           () => launchUrl(Uri.parse('mailto:${SiteContent.actual.contactoEmail}'))),
-      ('Dirección', SiteContent.actual.contactoDireccion,
+      (Icons.place_outlined, 'Dirección', SiteContent.actual.contactoDireccion,
           () => launchUrl(Uri.parse(SiteContent.actual.contactoMapsUrl))),
-      ('Horario', SiteContent.actual.contactoHorario, null),
+      (Icons.schedule_outlined, 'Horario', SiteContent.actual.contactoHorario, null),
     ];
 
     return Container(
       width: double.infinity,
       color: AppColors.char2,
       padding: EdgeInsets.symmetric(
-          horizontal: esAngosto ? 20 : 60, vertical: esAngosto ? 40 : 60),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(SiteContent.actual.contactoKicker,
-              style: TextStyle(
-                  color: AppColors.yellow,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 12,
-                  letterSpacing: 1)),
-          const SizedBox(height: 10),
-          Text(SiteContent.actual.contactoTitulo,
-              style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800)),
-          const SizedBox(height: 24),
-          esAngosto
-              ? Column(
-                  children: tarjetas
-                      .map((t) => Padding(
-                            padding: const EdgeInsets.only(bottom: 14),
-                            child: _tarjetaContacto(t, esAngosto),
-                          ))
-                      .toList(),
-                )
-              : Wrap(
-                  spacing: 16,
-                  runSpacing: 16,
-                  children: tarjetas.map((t) => _tarjetaContacto(t, esAngosto)).toList(),
-                ),
-          const SizedBox(height: 24),
-          MapaUbicacion(
-            consulta: SiteContent.actual.contactoDireccion,
-            alto: esAngosto ? 260 : 360,
-          ),
-        ],
+          horizontal: _padX(esAngosto), vertical: esAngosto ? 40 : 70),
+      child: Centrado(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TituloSeccion(
+                kicker: SiteContent.actual.contactoKicker,
+                titulo: SiteContent.actual.contactoTitulo,
+                oscuro: true),
+            const SizedBox(height: 28),
+            LayoutBuilder(builder: (context, c) {
+              final cols = esAngosto ? 1 : (c.maxWidth > 900 ? 4 : 2);
+              const gap = 16.0;
+              final w = (c.maxWidth - gap * (cols - 1)) / cols;
+              return Wrap(
+                spacing: gap,
+                runSpacing: gap,
+                children: tarjetas.map((t) => _tarjetaContacto(t, w)).toList(),
+              );
+            }),
+            const SizedBox(height: 28),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(18),
+              child: MapaUbicacion(
+                consulta: SiteContent.actual.contactoDireccion,
+                alto: esAngosto ? 260 : 380,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _tarjetaContacto((String, String, VoidCallback?) t, bool esAngosto) {
-    return Container(
-      width: esAngosto ? double.infinity : 260,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: AppColors.char,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.white12),
-      ),
-      child: InkWell(
-        onTap: t.$3,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(t.$1,
-                style: const TextStyle(
-                    color: AppColors.yellow, fontWeight: FontWeight.w700, fontSize: 12)),
-            const SizedBox(height: 8),
-            Text(t.$2, style: const TextStyle(color: Colors.white, fontSize: 14, height: 1.4)),
-          ],
+  Widget _tarjetaContacto((IconData, String, String, VoidCallback?) t, double ancho) {
+    return SizedBox(
+      width: ancho,
+      child: HoverLift(
+        onTap: t.$4,
+        builder: (context, hover) => AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          height: 118,
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: AppColors.char,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: hover && t.$4 != null ? AppColors.red : Colors.white12),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(9),
+                decoration: BoxDecoration(
+                  color: AppColors.red.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(t.$1, color: AppColors.yellow, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(t.$2,
+                        style: const TextStyle(
+                            color: AppColors.yellow, fontWeight: FontWeight.w800, fontSize: 12)),
+                    const SizedBox(height: 6),
+                    Expanded(
+                      child: Text(t.$3,
+                          overflow: TextOverflow.fade,
+                          style: const TextStyle(color: Colors.white, fontSize: 13.5, height: 1.4)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -626,7 +851,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          Text('© ${DateTime.now().year} ${SiteContent.actual.footerDerechos}',
+          Text('Â© ${DateTime.now().year} ${SiteContent.actual.footerDerechos}',
               style: const TextStyle(color: Colors.white38, fontSize: 11)),
         ],
       ),

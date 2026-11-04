@@ -6,6 +6,7 @@ import '../config.dart';
 import '../models.dart';
 import '../utils/format.dart';
 import '../utils/pdf_report.dart';
+import '../widgets/efectos.dart';
 
 /// Panel de administración con navegación lateral (sidebar), igual que el
 /// diseño de referencia: Inicio, Analítica, Catálogo, Reservas, Stock,
@@ -366,7 +367,13 @@ class _AdminScreenState extends State<AdminScreen> {
 
   Widget _buildSidebar() {
     return Container(
-      color: AppColors.char,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF1A1A1C), Color(0xFF2B1013)],
+        ),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -436,9 +443,9 @@ class _AdminScreenState extends State<AdminScreen> {
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Material(
         color: activo ? AppColors.red : Colors.transparent,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         child: InkWell(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(12),
           onTap: () {
             setState(() => _seccionActiva = s.clave);
             if (MediaQuery.of(context).size.width < 900) {
@@ -470,8 +477,11 @@ class _AdminScreenState extends State<AdminScreen> {
 
   Widget _buildTopbar() {
     final seccion = _secciones.firstWhere((s) => s.clave == _seccionActiva);
-    return Container(
+    return Material(
       color: Colors.white,
+      elevation: 2,
+      shadowColor: Colors.black12,
+      child: Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
       child: Row(
         children: [
@@ -496,6 +506,7 @@ class _AdminScreenState extends State<AdminScreen> {
             ),
           ),
         ],
+      ),
       ),
     );
   }
@@ -535,11 +546,35 @@ class _AdminScreenState extends State<AdminScreen> {
       child: ListView(
         padding: const EdgeInsets.all(24),
         children: [
-          Text('Hola, ${_sesion.usuario.isEmpty ? "administrador" : _sesion.usuario} 👋',
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.char)),
-          const SizedBox(height: 6),
-          Text('Este es el resumen general de Maykel Repuestos.',
-              style: TextStyle(color: AppColors.steel, fontSize: 13.5)),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(26),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                  colors: [Color(0xFF1A1A1C), Color(0xFF4A0F14)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Hola, ${_sesion.usuario.isEmpty ? "administrador" : _sesion.usuario} 👋',
+                          style: const TextStyle(
+                              fontSize: 24, fontWeight: FontWeight.w900, color: Colors.white)),
+                      const SizedBox(height: 6),
+                      const Text('Este es el resumen general de Maykel Repuestos.',
+                          style: TextStyle(color: Colors.white70, fontSize: 14)),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.dashboard_customize_outlined, color: Colors.white24, size: 56),
+              ],
+            ),
+          ),
           const SizedBox(height: 24),
           if (d != null)
             Wrap(
@@ -570,23 +605,30 @@ class _AdminScreenState extends State<AdminScreen> {
   }
 
   Widget _accesoRapido(_Seccion s) {
-    return InkWell(
+    return HoverLift(
       onTap: () => setState(() => _seccionActiva = s.clave),
-      borderRadius: BorderRadius.circular(10),
-      child: Container(
-        width: 170,
-        padding: const EdgeInsets.all(16),
+      builder: (context, hover) => AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        width: 180,
+        padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AppColors.paper2),
+          color: hover ? AppColors.char : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: hover ? AppColors.char : AppColors.paper2),
+          boxShadow: const [
+            BoxShadow(color: Color(0x10000000), blurRadius: 12, offset: Offset(0, 5)),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(s.icono, color: AppColors.red),
-            const SizedBox(height: 10),
-            Text(s.etiqueta, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
+            Icon(s.icono, color: AppColors.red, size: 26),
+            const SizedBox(height: 12),
+            Text(s.etiqueta,
+                style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13.5,
+                    color: hover ? Colors.white : AppColors.char)),
           ],
         ),
       ),
@@ -595,31 +637,39 @@ class _AdminScreenState extends State<AdminScreen> {
 
   Widget _kpiCard(String valor, String etiqueta, IconData icono) {
     return Container(
-      width: 210,
-      padding: const EdgeInsets.all(16),
+      width: 230,
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.paper2),
+        boxShadow: const [
+          BoxShadow(color: Color(0x12000000), blurRadius: 14, offset: Offset(0, 6)),
+        ],
       ),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-                color: AppColors.paper, borderRadius: BorderRadius.circular(8)),
-            child: Icon(icono, color: AppColors.red, size: 20),
+              gradient: const LinearGradient(
+                  colors: [AppColors.red, AppColors.redDark],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icono, color: Colors.white, size: 22),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(valor,
                     style: const TextStyle(
-                        fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.char)),
+                        fontSize: 24, fontWeight: FontWeight.w900, color: AppColors.char)),
                 Text(etiqueta,
-                    style: TextStyle(fontSize: 11, color: AppColors.steel), maxLines: 2),
+                    style: TextStyle(fontSize: 11.5, color: AppColors.steel), maxLines: 2),
               ],
             ),
           ),

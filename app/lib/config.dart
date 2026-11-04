@@ -51,24 +51,46 @@ ThemeData buildAppTheme() {
   );
 
   return base.copyWith(
+    cardTheme: CardThemeData(
+      color: Colors.white,
+      elevation: 1.5,
+      shadowColor: Colors.black12,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    ),
+    dialogTheme: DialogThemeData(
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+    ),
+    chipTheme: base.chipTheme.copyWith(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+    ),
+    dataTableTheme: DataTableThemeData(
+      headingRowColor: WidgetStatePropertyAll(AppColors.paper),
+      headingTextStyle: const TextStyle(
+          fontWeight: FontWeight.w800, color: AppColors.char, fontSize: 12.5),
+    ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
         backgroundColor: AppColors.red,
         foregroundColor: Colors.white,
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-        textStyle: const TextStyle(fontWeight: FontWeight.w600),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        textStyle: const TextStyle(fontWeight: FontWeight.w700),
       ),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: Colors.white,
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide(color: AppColors.paper2),
       ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: AppColors.red, width: 1.6),
+      ),
       contentPadding:
-          const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
     ),
   );
 }

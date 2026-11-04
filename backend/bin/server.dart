@@ -96,6 +96,12 @@ Future<void> _auditar(String? usuario, String ruta, String metodo,
 }
 
 String? _ipDe(Request req) {
+  // Tras Nginx todas las conexiones llegan desde 127.0.0.1: con TRUST_PROXY=1
+  // se usa la IP real que informa el proxy.
+  if (db.env['TRUST_PROXY'] == '1') {
+    final xff = req.headers['x-forwarded-for'];
+    if (xff != null && xff.isNotEmpty) return xff.split(',').first.trim();
+  }
   final info = req.context['shelf.io.connection_info'];
   if (info is HttpConnectionInfo) return info.remoteAddress.address;
   return null;
@@ -106,6 +112,23 @@ String? _ipDe(Request req) {
 const Map<String, String> permisoPorRuta = {
   'usuarios': 'usuarios',
   'roles': 'usuarios',
+  'contenido': 'configuracion',
+  'repuestos': 'stock',
+  'ventas': 'stock',
+  'reservas': 'reservas',
+  'dashboard': 'dashboard',
+  'analytics': 'dashboard',
+};
+
+/// Origen permitido por CORS. En producción definir CORS_ORIGIN=https://tudominio.cl
+String get _origenCors => db.env['CORS_ORIGIN'] ?? '*';
+
+final String _dirUploads = p.join(_dirBackend, 'uploads', 'productos');
+const int _maxBytesImagen = 3 * 1024 * 1024;
+const Map<String, String> _extensionesImagen = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
 };
 
 // ---------- Contenido por defecto del Sitio Web (Editable en PostgreSQL) ----------
@@ -303,6 +326,22 @@ Map<String, dynamic>? _sesionDesdeToken(Request request) {
   };
 }
 
+/// Convierte cualquier excepción no controlada en un JSON 500 sin filtrar detalles internos.
+Middleware _erroresComoJson() {
+  return (Handler inner) {
+    return (Request request) async {
+      try {
+        return await inner(request);
+      } on _ErrorNegocio catch (e) {
+        return _errorResponse(e.mensaje);
+      } catch (e, st) {
+        print('❌ ${request.method} /${request.url.path}: $e\n$st');
+        return _errorResponse('Error interno del servidor.', status: 500);
+      }
+    };
+  };
+}
+
 Middleware _authSoloAdmin() {
   return (Handler innerHandler) {
     return (Request request) async {
@@ -311,7 +350,7 @@ Middleware _authSoloAdmin() {
       // debemos dejarla pasar sin exigir contraseña.
       if (request.method.toUpperCase() == 'OPTIONS') {
         return Response.ok('', headers: {
-          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Origin': _origenCors,
           'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
           'Access-Control-Allow-Headers': 'Origin, Content-Type, Authorization, Accept',
         });
@@ -335,7 +374,7 @@ Middleware _authSoloAdmin() {
               body: jsonEncode({'error': 'Tu rol no tiene permiso para esta sección.'}),
               headers: {
                 'content-type': 'application/json; charset=utf-8',
-                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Origin': _origenCors,
               },
             );
           }
@@ -352,7 +391,7 @@ Middleware _authSoloAdmin() {
           }),
           headers: {
             'content-type': 'application/json; charset=utf-8',
-            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Origin': _origenCors,
           },
         );
       }
@@ -822,7 +861,10 @@ void main(List<String> args) async {
     // Soporta lista 'items' o un único 'repuestoId' enviado desde reserva_dialog.dart
     List<Map<String, dynamic>> items = [];
     if (body['items'] is List && (body['items'] as List).isNotEmpty) {
-      items = List<Map<String, dynamic>>.from(body['items'] as List);
+      items = (body['items'] as List)
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
     } else if (body['repuestoId'] != null) {
       items = [
         {
@@ -835,6 +877,12 @@ void main(List<String> args) async {
 
     if (items.isEmpty) {
       return _errorResponse('Debe incluir al menos un repuesto en la reserva');
+    }
+    if (items.any((i) => i['producto_id'] == null && i['repuestoId'] == null)) {
+      return _errorResponse('Formato de repuestos inválido');
+    }
+    if (items.length > 20 || nombre.length > 120 || telefono.length > 30 || nota.length > 500) {
+      return _errorResponse('Los datos de la reserva exceden el tamaño permitido');
     }
 
     // Restricción Cap. 5.1.2 del Informe:
@@ -870,14 +918,17 @@ void main(List<String> args) async {
         final prodId =
             _numDe(item['producto_id'] ?? item['repuestoId']).toInt();
         final cant = _numDe(item['cantidad'], 1).toInt();
+        if (cant < 1 || cant > 999) {
+          throw const _ErrorNegocio('La cantidad debe ser entre 1 y 999');
+        }
 
         final prodRow = await tx.execute(
           Sql.named(
-              'SELECT codigo_interno, nombre, stock_actual FROM productos WHERE id = @id'),
+              "SELECT codigo_interno, nombre, stock_actual FROM productos WHERE id = @id AND estado_catalogo = 'PUBLICADO'"),
           parameters: {'id': prodId},
         );
         if (prodRow.isEmpty) {
-          throw Exception('El producto ID $prodId no existe');
+          throw const _ErrorNegocio('El producto seleccionado ya no está disponible');
         }
         primerSku = prodRow.first[0].toString();
         primerProductoNombre = prodRow.first[1].toString();
@@ -1070,9 +1121,17 @@ void main(List<String> args) async {
       );
     }
 
+    final duplicado = await db.conn.execute(
+      Sql.named('SELECT 1 FROM productos WHERE codigo_interno = @sku'),
+      parameters: {'sku': sku},
+    );
+    if (duplicado.isNotEmpty) {
+      return _errorResponse('Ya existe un producto con el SKU $sku', status: 409);
+    }
+
     final inserted = await db.conn.execute(
       Sql.named('''
-        INSERT INTO productos 
+        INSERT INTO productos
         (codigo_interno, nombre, categoria_id, marca_referencia, modelo_referencia, stock_actual, precio_referencia, estado_catalogo)
         VALUES (@sku, @nombre, @catId, @marca, @modelo, @stock, @precio, 'PUBLICADO')
         RETURNING id
@@ -1107,7 +1166,7 @@ void main(List<String> args) async {
     final rows = await db.conn.execute('''
       SELECT p.id, p.codigo_interno, p.nombre, COALESCE(c.nombre, 'General'),
              p.marca_referencia, p.modelo_referencia, p.precio_referencia,
-             p.stock_actual, p.estado_catalogo
+             p.stock_actual, p.estado_catalogo, p.imagen_url
       FROM productos p
       LEFT JOIN categorias c ON p.categoria_id = c.id
       ORDER BY p.nombre ASC
@@ -1123,9 +1182,61 @@ void main(List<String> args) async {
               'precio': r[6] ?? 0,
               'stock': r[7],
               'estado_catalogo': r[8],
+              'imagen_url': r[9],
               'es_ejemplo': false,
             })
         .toList());
+  });
+
+  // Sube la foto de un producto (cuerpo = bytes de la imagen; JPG, PNG o WebP, máx. 3 MB).
+  router.post('/api/admin/repuestos/<id>/imagen', (Request req, String id) async {
+    final idNum = int.tryParse(id);
+    if (idNum == null) return _errorResponse('ID inválido');
+    final tipo = (req.headers['content-type'] ?? '').split(';').first.trim().toLowerCase();
+    final ext = _extensionesImagen[tipo];
+    if (ext == null) return _errorResponse('Formato no permitido. Usa JPG, PNG o WebP.');
+
+    final bytes = <int>[];
+    await for (final trozo in req.read()) {
+      bytes.addAll(trozo);
+      if (bytes.length > _maxBytesImagen) {
+        return _errorResponse('La imagen supera los 3 MB.', status: 413);
+      }
+    }
+    if (bytes.isEmpty) return _errorResponse('Imagen vacía');
+
+    final existe = await db.conn.execute(
+      Sql.named('SELECT 1 FROM productos WHERE id = @id'),
+      parameters: {'id': idNum},
+    );
+    if (existe.isEmpty) return _errorResponse('Producto no encontrado', status: 404);
+
+    await Directory(_dirUploads).create(recursive: true);
+    for (final e in _extensionesImagen.values) {
+      final vieja = File(p.join(_dirUploads, '$idNum.$e'));
+      if (await vieja.exists()) await vieja.delete();
+    }
+    await File(p.join(_dirUploads, '$idNum.$ext')).writeAsBytes(bytes);
+    final url = '/media/productos/$idNum.$ext?v=${DateTime.now().millisecondsSinceEpoch}';
+    await db.conn.execute(
+      Sql.named('UPDATE productos SET imagen_url = @url WHERE id = @id'),
+      parameters: {'url': url, 'id': idNum},
+    );
+    return _jsonResponse({'id': idNum, 'imagen_url': url}, status: 201);
+  });
+
+  router.delete('/api/admin/repuestos/<id>/imagen', (Request req, String id) async {
+    final idNum = int.tryParse(id);
+    if (idNum == null) return _errorResponse('ID inválido');
+    for (final e in _extensionesImagen.values) {
+      final f = File(p.join(_dirUploads, '$idNum.$e'));
+      if (await f.exists()) await f.delete();
+    }
+    await db.conn.execute(
+      Sql.named('UPDATE productos SET imagen_url = NULL WHERE id = @id'),
+      parameters: {'id': idNum},
+    );
+    return _jsonResponse({'ok': true});
   });
 
   router.delete('/api/admin/repuestos/<id>', (Request req, String id) async {
@@ -1666,6 +1777,15 @@ void main(List<String> args) async {
   // ==========================================================================
   Handler handler = router.call;
 
+  Directory(_dirUploads).createSync(recursive: true);
+  final mediaHandler = createStaticHandler(p.dirname(_dirUploads));
+  handler = Cascade()
+      .add(handler)
+      .add((Request req) => req.url.path.startsWith('media/')
+          ? mediaHandler(req.change(path: 'media'))
+          : Response.notFound('Not Found'))
+      .handler;
+
   final buildWebDir = Directory(rutaBuildWeb);
   if (buildWebDir.existsSync()) {
     final staticHandler = createStaticHandler(
@@ -1677,7 +1797,8 @@ void main(List<String> args) async {
 
   final pipeline = const Pipeline()
       .addMiddleware(logRequests())
-      .addMiddleware(corsHeaders())
+      .addMiddleware(_erroresComoJson())
+      .addMiddleware(corsHeaders(headers: {ACCESS_CONTROL_ALLOW_ORIGIN: _origenCors}))
       .addMiddleware(_authSoloAdmin())
       .addHandler(handler);
 

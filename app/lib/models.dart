@@ -1,6 +1,8 @@
 /// Modelos de datos del catálogo, reservas y ventas.
 /// Reflejan exactamente la misma estructura JSON que entrega el backend.
 
+import 'config.dart';
+
 /// Todos los permisos que puede tener un rol, en el orden en que se
 /// muestran en el formulario de creación de roles. Deben coincidir
 /// exactamente con `permisosDisponibles` del backend.
@@ -32,6 +34,7 @@ class Repuesto {
   final num precio;
   final num stock;
   final bool esEjemplo;
+  final String? imagenUrl;
   final String? _sku;
 
   Repuesto({
@@ -43,6 +46,7 @@ class Repuesto {
     required this.precio,
     required this.stock,
     this.esEjemplo = false,
+    this.imagenUrl,
     String? sku,
   }) : _sku = sku;
 
@@ -60,9 +64,16 @@ class Repuesto {
       precio: json['precio'] as num? ?? 0,
       stock: json['stock'] as num? ?? 0,
       esEjemplo: json['es_ejemplo'] as bool? ?? false,
+      imagenUrl: (json['imagen_url'] as String?)?.isNotEmpty == true
+          ? json['imagen_url'] as String
+          : null,
       sku: json['sku'] as String?,
     );
   }
+
+  /// URL absoluta de la foto (la API entrega rutas relativas `/media/...`).
+  String? get imagenAbsoluta =>
+      imagenUrl == null ? null : (imagenUrl!.startsWith('http') ? imagenUrl : '$kApiBase$imagenUrl');
 
   Map<String, dynamic> toJson() => {
         'id': id,

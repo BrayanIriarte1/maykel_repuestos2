@@ -42,8 +42,7 @@ class ProductCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Container(
-              height: 104,
-              padding: const EdgeInsets.all(12),
+              height: producto.imagenAbsoluta != null ? 150 : 104,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
@@ -54,24 +53,50 @@ class ProductCard extends StatelessWidget {
                 ),
               ),
               child: Stack(
+                fit: StackFit.expand,
                 children: [
-                  Positioned(
-                    left: 0,
-                    top: 0,
-                    child: Text(
-                      producto.sku,
-                      style: const TextStyle(
-                          color: Colors.white70, fontSize: 11, fontFamily: 'monospace'),
+                  if (producto.imagenAbsoluta != null) ...[
+                    Image.network(
+                      producto.imagenAbsoluta!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const SizedBox.shrink(),
                     ),
-                  ),
-                  Positioned(right: 0, top: 0, child: _StockBadge(stock: stock)),
-                  Align(
-                    alignment: Alignment.bottomCenter,
-                    child: AnimatedScale(
-                      duration: const Duration(milliseconds: 180),
-                      scale: hover ? 1.15 : 1,
-                      child: Icon(iconoCategoria(producto.categoria),
-                          color: Colors.white.withOpacity(0.35), size: 44),
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [Colors.black.withOpacity(0.55), Colors.transparent],
+                          stops: const [0, 0.5],
+                        ),
+                      ),
+                    ),
+                  ],
+                  Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Stack(
+                      children: [
+                        Positioned(
+                          left: 0,
+                          top: 0,
+                          child: Text(
+                            producto.sku,
+                            style: const TextStyle(
+                                color: Colors.white70, fontSize: 11, fontFamily: 'monospace'),
+                          ),
+                        ),
+                        Positioned(right: 0, top: 0, child: _StockBadge(stock: stock)),
+                        if (producto.imagenAbsoluta == null)
+                          Align(
+                            alignment: Alignment.bottomCenter,
+                            child: AnimatedScale(
+                              duration: const Duration(milliseconds: 180),
+                              scale: hover ? 1.15 : 1,
+                              child: Icon(iconoCategoria(producto.categoria),
+                                  color: Colors.white.withOpacity(0.35), size: 44),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                 ],

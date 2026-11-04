@@ -184,6 +184,36 @@ void main() {
       expect(r.statusCode, 403);
     });
 
+    test('vendedor no puede editar contenido (403)', () async {
+      final l = await login('vendedor', 'ventas2026');
+      if (l.statusCode != 200) return;
+      final h = conToken(jsonDecode(l.body)['token'].toString());
+      expect((await http.get(u('/api/admin/contenido'), headers: h)).statusCode, 403);
+    });
+
+    test('imagen: sin token 401, tipo inválido 400, producto inexistente 404', () async {
+      expect((await http.post(u('/api/admin/repuestos/1/imagen'))).statusCode, 401);
+      final tipo = await http.post(u('/api/admin/repuestos/1/imagen'),
+          headers: {...adminHeaders, 'Content-Type': 'text/plain'}, body: 'x');
+      expect(tipo.statusCode, anyOf(400, 415));
+      final nada = await http.post(u('/api/admin/repuestos/999999999/imagen'),
+          headers: {...adminHeaders, 'Content-Type': 'image/png'}, body: [1, 2, 3]);
+      expect(nada.statusCode, 404);
+    });
+
+    test('reserva con cantidad inválida o sin producto → 400', () async {
+      Future<http.Response> reservar(Map item) => http.post(u('/api/reservas'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'cliente_nombre': 'Prueba',
+            'cliente_telefono': '+56911111111',
+            'cliente_email': 'prueba@correo.cl',
+            'items': [item],
+          }));
+      expect((await reservar({'cantidad': 1})).statusCode, 400);
+      expect((await reservar({'producto_id': 1, 'cantidad': 5000})).statusCode, 400);
+    });
+
     test('sync con token inválido → 401', () async {
       final r = await http.post(u('/api/v1/sync/inventory'),
           headers: conToken('token-falso'),

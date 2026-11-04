@@ -1,4 +1,5 @@
 import 'package:fl_chart/fl_chart.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../api_service.dart';
@@ -1559,13 +1560,43 @@ class _AdminScreenState extends State<AdminScreen> {
       ),
       DataCell(_estadoStockBadge(int.tryParse(stockCtrl.text) ?? 0)),
       DataCell(
-        IconButton(
-          icon: Icon(Icons.delete_outline, size: 18, color: AppColors.bad),
-          tooltip: 'Eliminar producto',
-          onPressed: () => _eliminarProducto(p),
-        ),
+        Row(mainAxisSize: MainAxisSize.min, children: [
+          IconButton(
+            icon: Icon(
+                p.imagenUrl == null ? Icons.add_photo_alternate_outlined : Icons.image,
+                size: 18),
+            tooltip: p.imagenUrl == null ? 'Subir foto' : 'Cambiar foto',
+            onPressed: () => _subirFoto(p),
+          ),
+          IconButton(
+            icon: Icon(Icons.delete_outline, size: 18, color: AppColors.bad),
+            tooltip: 'Eliminar producto',
+            onPressed: () => _eliminarProducto(p),
+          ),
+        ]),
       ),
     ]);
+  }
+
+  Future<void> _subirFoto(Repuesto p) async {
+    final sel = await FilePicker.pickFiles(type: FileType.image);
+    if (sel.isEmpty) return;
+    final archivo = sel.first;
+    final ext = (archivo.extension ?? '').toLowerCase();
+    final tipo = ext == 'png' ? 'image/png' : ext == 'webp' ? 'image/webp' : 'image/jpeg';
+    try {
+      final bytes = await archivo.readAsBytes();
+      await ApiService.instance.subirImagenRepuesto(p.id, bytes, tipo);
+      await _cargarTodo();
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Foto actualizada.')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      }
+    }
   }
 
   Widget _estadoStockBadge(int stock) {

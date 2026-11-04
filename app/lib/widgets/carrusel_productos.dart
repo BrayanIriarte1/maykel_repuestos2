@@ -269,7 +269,17 @@ class _Diapositiva extends StatelessWidget {
       padding: const EdgeInsets.all(26),
       child: Stack(
         children: [
-          Positioned(
+          if (producto.imagenAbsoluta != null)
+            Positioned(
+              right: 0,
+              top: 0,
+              bottom: 0,
+              width: 190,
+              child: Image.network(producto.imagenAbsoluta!,
+                  fit: BoxFit.contain, errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+            )
+          else
+            Positioned(
             right: -20,
             bottom: -30,
             child: Icon(iconoCategoria(producto.categoria),

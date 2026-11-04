@@ -85,3 +85,11 @@ enlace **Admin** con `admin` / `maykel2026` (ver más usuarios en
 
 `--no-web-resources-cdn` deja los archivos del motor gráfico dentro del
 build, así el sitio funciona aunque no haya internet en la presentación.
+
+### Fotos de productos
+
+- Una a una: Admin → Stock → ícono de foto de cada fila (JPG/PNG/WebP, máx. 3 MB).
+- En lote: nombra cada archivo con el SKU (`MR-001.jpg`) y ejecuta
+  `cd backend` y `dart run tools\importar_imagenes.dart C:\fotos` (agrega
+  `--simular` para ver qué haría sin cambiar nada). Se guardan en
+  `backend/uploads/productos/` (excluida de Git: respáldala al desplegar).

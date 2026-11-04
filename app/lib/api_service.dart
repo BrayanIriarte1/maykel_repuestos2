@@ -36,6 +36,19 @@ class ApiService {
     return headers;
   }
 
+  /// Sube la foto de un producto (bytes crudos). Devuelve la nueva imagen_url.
+  Future<String> subirImagenRepuesto(int id, List<int> bytes, String contentType) async {
+    final resp = await http.post(
+      _uri('/api/admin/repuestos/$id/imagen'),
+      headers: {..._headers(admin: true), 'Content-Type': contentType},
+      body: bytes,
+    );
+    if (resp.statusCode != 200 && resp.statusCode != 201) {
+      throw ApiException(_mensajeError(resp) ?? 'No se pudo subir la imagen');
+    }
+    return (jsonDecode(resp.body) as Map)['imagen_url'] as String;
+  }
+
   String? _mensajeError(http.Response resp) {
     try {
       final data = jsonDecode(resp.body);

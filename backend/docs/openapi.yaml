@@ -453,6 +453,48 @@ paths:
           $ref: '#/components/responses/Error'
         '401':
           $ref: '#/components/responses/NoAutorizado'
+  /api/admin/repuestos/{id}/imagen:
+    post:
+      tags: [Admin - Catálogo y stock]
+      summary: Sube la foto de un producto (bytes crudos, máx. 3 MB)
+      security: [{basicAuth: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer}}
+      requestBody:
+        required: true
+        content:
+          image/jpeg: {schema: {type: string, format: binary}}
+          image/png: {schema: {type: string, format: binary}}
+          image/webp: {schema: {type: string, format: binary}}
+      responses:
+        '201':
+          description: Imagen guardada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: {type: integer}
+                  imagen_url: {type: string, example: '/media/productos/2.png?v=1793834076912'}
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+        '404':
+          description: Producto inexistente
+        '413':
+          description: Imagen mayor a 3 MB
+    delete:
+      tags: [Admin - Catálogo y stock]
+      summary: Quita la foto de un producto
+      security: [{basicAuth: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer}}
+      responses:
+        '200':
+          $ref: '#/components/responses/Ok'
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
   /api/admin/reservas:
     get:
       tags: [Admin - Reservas y ventas]

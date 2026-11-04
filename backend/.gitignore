@@ -6,3 +6,4 @@ catalogo_db.json.tmp
 
 .env
 logs/
+uploads/

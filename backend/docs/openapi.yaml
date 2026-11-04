@@ -218,6 +218,7 @@ paths:
                   modelos:
                     type: array
                     items: {type: object, properties: {nombre: {type: string}, total: {type: integer}}}
+  /api/catalogo:
     get:
       tags: [Catálogo]
       summary: Alias de /api/repuestos

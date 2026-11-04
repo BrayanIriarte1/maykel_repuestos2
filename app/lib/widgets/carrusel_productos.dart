@@ -118,6 +118,7 @@ class SeccionCarrusel extends StatelessWidget {
   final List<Repuesto> productos;
   final void Function(Repuesto) onReservar;
   final bool oscuro;
+  final Widget? lateral;
 
   const SeccionCarrusel({
     super.key,
@@ -126,6 +127,7 @@ class SeccionCarrusel extends StatelessWidget {
     required this.productos,
     required this.onReservar,
     this.oscuro = false,
+    this.lateral,
   });
 
   @override
@@ -143,7 +145,19 @@ class SeccionCarrusel extends StatelessWidget {
           children: [
             TituloSeccion(kicker: kicker, titulo: titulo, oscuro: oscuro),
             const SizedBox(height: 24),
-            CarruselProductos(productos: productos, onReservar: onReservar),
+            if (lateral == null)
+              CarruselProductos(productos: productos, onReservar: onReservar)
+            else
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(width: 300, child: lateral),
+                  const SizedBox(width: 32),
+                  Expanded(
+                    child: CarruselProductos(productos: productos, onReservar: onReservar),
+                  ),
+                ],
+              ),
           ],
         ),
       ),

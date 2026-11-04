@@ -28,6 +28,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final _catalogoKey = GlobalKey();
   final _contactoKey = GlobalKey();
   final _scrollController = ScrollController();
+  final _busquedaCtrl = TextEditingController();
 
   List<Repuesto> _productos = []; // pool para carruseles y hero
   bool _cargando = true;
@@ -64,6 +65,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void dispose() {
     _debounce?.cancel();
     _scrollController.dispose();
+    _busquedaCtrl.dispose();
     super.dispose();
   }
 
@@ -74,7 +76,7 @@ class _HomeScreenState extends State<HomeScreen> {
     });
     try {
       final pool = await ApiService.instance
-          .getRepuestosPagina(limite: 60, soloDisponibles: true);
+          .getRepuestosPagina(limite: 200, soloDisponibles: true);
       if (!mounted) return;
       setState(() {
         _productos = pool.items;
@@ -172,11 +174,243 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  /// Reparte los productos entre categorías para que el carrusel no sea monótono.
+  List<Repuesto> _variados(Iterable<Repuesto> origen, int max) {
+    final porCat = <String, List<Repuesto>>{};
+    for (final p in origen) {
+      porCat.putIfAbsent(p.categoria, () => []).add(p);
+    }
+    final listas = porCat.values.toList();
+    final res = <Repuesto>[];
+    for (var i = 0; res.length < max; i++) {
+      var agregado = false;
+      for (final l in listas) {
+        if (i < l.length && res.length < max) {
+          res.add(l[i]);
+          agregado = true;
+        }
+      }
+      if (!agregado) break;
+    }
+    return res;
+  }
+
   List<Repuesto> get _destacados =>
-      _productos.where((p) => p.stock > 3).take(10).toList();
+      _variados(_productos.where((p) => p.stock > 3), 12);
 
   List<Repuesto> get _ultimas =>
-      _productos.where((p) => p.stock > 0 && p.stock <= 3).toList();
+      _variados(_productos.where((p) => p.stock > 0 && p.stock <= 3), 12);
+
+  void _irAMarca(String marca) {
+    _filtrar(() {
+      _marca = marca;
+      _modelo = null;
+      _modelos = [];
+    }, recargarFiltros: true);
+    _scrollA(_catalogoKey);
+  }
+
+  void _irACategoria(String categoria) {
+    _filtrar(() => _categoria = categoria);
+    _scrollA(_catalogoKey);
+  }
+
+  Widget _chipMarca(String nombre, int total, {bool oscuro = false}) {
+    return HoverLift(
+      onTap: () => _irAMarca(nombre),
+      builder: (_, hover) => AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+        decoration: BoxDecoration(
+          color: hover ? AppColors.red : (oscuro ? Colors.white10 : Colors.white),
+          borderRadius: BorderRadius.circular(30),
+          border: Border.all(color: hover ? AppColors.red : AppColors.paper2),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.directions_car_filled_outlined,
+              size: 16, color: hover ? Colors.white : AppColors.red),
+          const SizedBox(width: 8),
+          Text(nombre,
+              style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  color: hover ? Colors.white : (oscuro ? Colors.white : AppColors.char))),
+          const SizedBox(width: 8),
+          Text('$total',
+              style: TextStyle(
+                  fontSize: 12, color: hover ? Colors.white70 : AppColors.steel)),
+        ]),
+      ),
+    );
+  }
+
+  List<(String, int)> get _marcasTop {
+    final l = [..._marcas]..sort((a, b) => b.$2.compareTo(a.$2));
+    return l.take(14).toList();
+  }
+
+  /// Franja "Compra por marca": accesos directos al filtro del catálogo.
+  Widget _buildMarcasRapidas(bool esAngosto) {
+    if (_marcasTop.isEmpty) return const SizedBox.shrink();
+    return Container(
+      width: double.infinity,
+      color: Colors.white,
+      padding: EdgeInsets.symmetric(
+          horizontal: _padX(esAngosto), vertical: esAngosto ? 30 : 44),
+      child: Centrado(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const TituloSeccion(
+                kicker: 'Encuentra el tuyo', titulo: 'Compra por marca de vehículo'),
+            const SizedBox(height: 20),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: _marcasTop.map((m) => _chipMarca(m.$1, m.$2)).toList(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static const _iconosCategoria = <String, IconData>{
+    'aceite': Icons.oil_barrel_outlined,
+    'filtro': Icons.filter_alt_outlined,
+    'freno': Icons.disc_full_outlined,
+    'bater': Icons.battery_charging_full,
+    'luz': Icons.lightbulb_outline,
+    'faro': Icons.lightbulb_outline,
+    'suspens': Icons.height,
+    'amortig': Icons.height,
+    'motor': Icons.settings_outlined,
+    'correa': Icons.sync,
+    'bujía': Icons.flash_on_outlined,
+    'bujia': Icons.flash_on_outlined,
+    'refriger': Icons.ac_unit,
+    'radiador': Icons.ac_unit,
+    'embrague': Icons.settings_applications_outlined,
+    'rodam': Icons.circle_outlined,
+    'neum': Icons.tire_repair,
+    'electric': Icons.electrical_services,
+    'escobill': Icons.cleaning_services_outlined,
+    'espejo': Icons.flip,
+  };
+
+  IconData _iconoCategoria(String nombre) {
+    final n = nombre.toLowerCase();
+    for (final e in _iconosCategoria.entries) {
+      if (n.contains(e.key)) return e.value;
+    }
+    return Icons.build_circle_outlined;
+  }
+
+  /// Cuadrícula "Explora por categoría".
+  Widget _buildCategoriasRapidas(bool esAngosto) {
+    final cats = _categoriasLista
+        .where((c) => c.trim().isNotEmpty && c.length <= 26)
+        .take(12)
+        .toList();
+    if (cats.isEmpty) return const SizedBox.shrink();
+    return Container(
+      width: double.infinity,
+      color: AppColors.paper,
+      padding: EdgeInsets.symmetric(
+          horizontal: _padX(esAngosto), vertical: esAngosto ? 36 : 56),
+      child: Centrado(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const TituloSeccion(kicker: 'Todo para tu vehículo', titulo: 'Explora por categoría'),
+            const SizedBox(height: 22),
+            LayoutBuilder(builder: (context, c) {
+              final cols = esAngosto ? 2 : (c.maxWidth / 200).floor().clamp(3, 6);
+              const gap = 14.0;
+              final w = (c.maxWidth - gap * (cols - 1)) / cols;
+              return Wrap(
+                spacing: gap,
+                runSpacing: gap,
+                children: cats
+                    .map((cat) => SizedBox(
+                          width: w,
+                          child: HoverLift(
+                            onTap: () => _irACategoria(cat),
+                            builder: (_, hover) => AnimatedContainer(
+                              duration: const Duration(milliseconds: 160),
+                              padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 12),
+                              decoration: BoxDecoration(
+                                color: hover ? AppColors.char : Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: [
+                                  BoxShadow(
+                                      color: Colors.black.withOpacity(hover ? 0.18 : 0.06),
+                                      blurRadius: hover ? 18 : 8,
+                                      offset: const Offset(0, 4))
+                                ],
+                              ),
+                              child: Column(children: [
+                                Icon(_iconoCategoria(cat),
+                                    size: 34,
+                                    color: hover ? AppColors.yellow : AppColors.red),
+                                const SizedBox(height: 10),
+                                Text(cat,
+                                    textAlign: TextAlign.center,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        color: hover ? Colors.white : AppColors.char)),
+                              ]),
+                            ),
+                          ),
+                        ))
+                    .toList(),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Panel lateral de "Últimas unidades": urgencia + acceso al catálogo.
+  Widget _panelUltimas() {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [AppColors.red, Color(0xFF7A1A22)]),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.local_fire_department, color: AppColors.yellow, size: 40),
+          const SizedBox(height: 12),
+          const Text('¡Quedan pocas!',
+              style: TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 8),
+          const Text(
+              'Reserva online tu repuesto y retíralo en tienda antes de que se agote.',
+              style: TextStyle(color: Colors.white70, height: 1.5)),
+          const SizedBox(height: 20),
+          ElevatedButton(
+            onPressed: () => _scrollA(_catalogoKey),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.yellow,
+              foregroundColor: AppColors.char,
+              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+            ),
+            child: const Text('Ver catálogo completo'),
+          ),
+        ],
+      ),
+    );
+  }
 
   void _scrollA(GlobalKey key) {
     final ctx = key.currentContext;
@@ -230,6 +464,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       productos: _destacados,
                       onReservar: _abrirReserva,
                     ),
+                  _buildMarcasRapidas(esAngosto),
                   Container(key: _historiaKey, child: _buildHistoria(esAngosto)),
                   Container(key: _serviciosKey, child: _buildServicios(esAngosto)),
                   if (!_cargando && _error == null)
@@ -239,7 +474,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       productos: _ultimas,
                       onReservar: _abrirReserva,
                       oscuro: true,
+                      lateral: esAngosto ? null : _panelUltimas(),
                     ),
+                  _buildCategoriasRapidas(esAngosto),
                   Container(key: _catalogoKey, child: _buildCatalogo(esAngosto)),
                   Container(key: _contactoKey, child: _buildContacto(esAngosto)),
                   _buildFooter(esAngosto),
@@ -385,7 +622,7 @@ class _HomeScreenState extends State<HomeScreen> {
           runSpacing: 14,
           children: [
             _statHero(_totalGeneral > 0 ? '$_totalGeneral' : '${_productos.length}', SiteContent.actual.heroEstadisticaProductosEtiqueta),
-            _statHero(SiteContent.actual.heroEstadisticaMarcasValor,
+            _statHero(_marcas.isNotEmpty ? '${_marcas.length}+' : SiteContent.actual.heroEstadisticaMarcasValor,
                 SiteContent.actual.heroEstadisticaMarcasEtiqueta),
             _statHero(SiteContent.actual.heroEstadisticaCategoriasValor,
                 SiteContent.actual.heroEstadisticaCategoriasEtiqueta),
@@ -689,6 +926,7 @@ class _HomeScreenState extends State<HomeScreen> {
               shadowColor: Colors.black26,
               borderRadius: BorderRadius.circular(30),
               child: TextField(
+                controller: _busquedaCtrl,
                 decoration: InputDecoration(
                   prefixIcon: const Icon(Icons.search, color: AppColors.red),
                   hintText: SiteContent.actual.catalogoBusquedaHint,
@@ -704,6 +942,27 @@ class _HomeScreenState extends State<HomeScreen> {
                   _debounce = Timer(const Duration(milliseconds: 350), _buscarCatalogo);
                 },
               ),
+            ),
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                const Text('Búsquedas rápidas:',
+                    style: TextStyle(color: AppColors.steel, fontSize: 12.5)),
+                for (final s in const ['Filtro de aceite', 'Pastillas de freno', 'Bujías', 'Amortiguador', 'Batería', 'Correa'])
+                  ActionChip(
+                    label: Text(s, style: const TextStyle(fontSize: 12.5)),
+                    backgroundColor: Colors.white,
+                    side: const BorderSide(color: AppColors.paper2),
+                    onPressed: () {
+                      _busqueda = s;
+                      _busquedaCtrl.text = s;
+                      _buscarCatalogo();
+                    },
+                  ),
+              ],
             ),
             const SizedBox(height: 16),
             _buildFiltros(),

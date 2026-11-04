@@ -171,7 +171,7 @@ Map<String, dynamic> contenidoPorDefecto() {
       'direccion': 'Vargas #2275, Calama, Región de Antofagasta',
       'mapsUrl':
           'https://www.google.com/maps/place/Maykel+Repuestos/@-22.4608953,-68.9286172,21z',
-      'horario': 'Lunes a viernes, 9:30 – 19:00\nSábado, 9:30 – 14:00',
+      'horario': 'Lunes a viernes, 9:00 – 18:30\nSábado, 9:30 – 14:00',
     },
     'avisoLegal': {
       'actualizado': 'octubre de 2026',

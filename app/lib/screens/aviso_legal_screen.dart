@@ -67,9 +67,7 @@ class _AvisoLegalScreenState extends State<AvisoLegalScreen> {
                     border: const Border(left: BorderSide(color: AppColors.yellow, width: 3)),
                   ),
                   child: Text(
-                    'Este texto es una referencia general y no reemplaza asesoría legal '
-                    'profesional. Se recomienda revisarlo con un abogado antes de publicar '
-                    'el sitio, especialmente en lo relativo a protección de datos personales.',
+                    '',
                     style: TextStyle(fontSize: 13, color: AppColors.steel, height: 1.6),
                   ),
                 ),

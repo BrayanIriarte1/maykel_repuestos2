@@ -8,14 +8,17 @@
 //   stock | saldo | cantidad             (obligatoria)
 //
 // Uso (desde backend/):
+//   dart run tools/sync_agent.dart --sistema [--cada 30] [--simular]
+//       Lee el inventario del sistema de gestión del cliente (SISTEMA_* en .env).
 //   dart run tools/sync_agent.dart --archivo C:\inventario\stock.csv --url https://tu-dominio.cl --token TU_TOKEN [--cada 30] [--simular]
-// También acepta las variables SYNC_URL, SYNC_API_TOKEN y SYNC_ARCHIVO.
+// También acepta las variables SYNC_URL, SYNC_API_TOKEN y SYNC_ARCHIVO (o backend/.env).
 //   --cada N   repite cada N minutos (por defecto una sola vez)
 //   --simular  solo valida el archivo, no envía nada
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:dotenv/dotenv.dart';
 import 'package:http/http.dart' as http;
 
 const _tamLote = 200;
@@ -106,15 +109,147 @@ String? _arg(List<String> args, String nombre) {
   return (i >= 0 && i + 1 < args.length) ? args[i + 1] : null;
 }
 
-Future<bool> sincronizarUnaVez(
-    String archivo, String url, String token, bool simular) async {
-  final marca = DateTime.now().toIso8601String();
-  final f = File(archivo);
-  if (!f.existsSync()) {
-    stderr.writeln('[$marca] No existe el archivo: $archivo');
-    return false;
+String _limpiarHtml(String s) => s
+    .replaceAll(RegExp(r'<form.*?</form>', dotAll: true), '')
+    .replaceAll(RegExp(r'<[^>]+>'), '')
+    .replaceAll('&amp;', '&')
+    .replaceAll('&quot;', '"')
+    .replaceAll('&#039;', "'")
+    .replaceAll('&nbsp;', ' ')
+    .trim();
+
+/// Lee el inventario desde el sistema de gestión del cliente
+/// (https://sistema.maykelrepuestos.cl, Laravel): inicia sesión y consulta
+/// SOLO LECTURA el JSON de cada bodega (`/materiales_data/<bodega>`).
+/// Une las bodegas por id de material (suma stock) y genera un SKU estable.
+Future<ResultadoLectura> leerSistemaCliente(
+    String base, String email, String clave, List<int> bodegas) async {
+  final errores = <String>[];
+  final cliente = http.Client();
+  final cookies = <String, String>{};
+
+  void guardarCookies(http.BaseResponse r) {
+    final sc = r.headers['set-cookie'];
+    if (sc == null) return;
+    for (final m in RegExp(r'(?:^|,\s*)([A-Za-z0-9_\-]+)=([^;,]*)').allMatches(sc)) {
+      final k = m.group(1)!;
+      if (const {'path', 'expires', 'domain', 'samesite', 'secure', 'httponly', 'max-age'}
+          .contains(k.toLowerCase())) {
+        continue;
+      }
+      cookies[k] = m.group(2)!;
+    }
   }
-  final lectura = leerCsv(utf8.decode(f.readAsBytesSync(), allowMalformed: true));
+
+  String cookieHeader() => cookies.entries.map((e) => '${e.key}=${e.value}').join('; ');
+
+  try {
+    final login = await cliente.get(Uri.parse('$base/login'));
+    guardarCookies(login);
+    final token = RegExp(r'name="_token" value="([^"]+)"').firstMatch(login.body)?.group(1);
+    if (token == null) {
+      return ResultadoLectura([], ['No se encontró el formulario de login en $base']);
+    }
+    final req = http.Request('POST', Uri.parse('$base/login'))
+      ..followRedirects = false
+      ..headers['Cookie'] = cookieHeader()
+      ..bodyFields = {'_token': token, 'email': email, 'password': clave};
+    final resp = await http.Response.fromStream(await cliente.send(req));
+    guardarCookies(resp);
+    final destino = resp.headers['location'] ?? '';
+    if (resp.statusCode < 300 || resp.statusCode >= 400 || destino.contains('/login')) {
+      return ResultadoLectura([], ['Login rechazado por el sistema del cliente (revisa usuario y clave)']);
+    }
+
+    final filas = <int, Map<String, dynamic>>{};
+    for (final bodega in bodegas) {
+      final r = await cliente.get(
+        Uri.parse('$base/materiales_data/$bodega?draw=1&start=0&length=100000'),
+        headers: {
+          'Cookie': cookieHeader(),
+          'X-Requested-With': 'XMLHttpRequest',
+          'Accept': 'application/json',
+        },
+      ).timeout(const Duration(seconds: 120));
+      if (r.statusCode != 200) {
+        errores.add('Bodega $bodega: respuesta ${r.statusCode}');
+        continue;
+      }
+      final data = (jsonDecode(r.body)['data'] as List<dynamic>);
+      for (final fila in data) {
+        final c = (fila as List<dynamic>).map((e) => e.toString()).toList();
+        if (c.length < 9) continue;
+        final id = int.tryParse(RegExp(r'data-id="(\d+)"').firstMatch(c[0])?.group(1) ?? '');
+        if (id == null) continue;
+        final stock = int.tryParse(_limpiarHtml(c[2])) ?? 0;
+        final habilitado = c[8].contains('checked');
+        final previo = filas[id];
+        if (previo != null) {
+          previo['stock'] = (previo['stock'] as int) + (habilitado ? stock : 0);
+          continue;
+        }
+        filas[id] = {
+          'id': id,
+          'codigo': _limpiarHtml(c[4]),
+          'nombre': _limpiarHtml(c[0]),
+          'categoria': _limpiarHtml(c[1]),
+          'precio': int.tryParse(_limpiarHtml(c[5]).replaceAll(RegExp(r'[^0-9]'), '')) ?? 0,
+          'stock': habilitado ? (stock < 0 ? 0 : stock) : 0,
+        };
+      }
+    }
+
+    final porCodigo = <String, int>{};
+    for (final f in filas.values) {
+      porCodigo[f['codigo'] as String] = (porCodigo[f['codigo'] as String] ?? 0) + 1;
+    }
+    final productos = <Map<String, dynamic>>[];
+    for (final f in filas.values) {
+      final codigo = f['codigo'] as String;
+      final sinCodigo = codigo.isEmpty || codigo == '0';
+      final sku = sinCodigo
+          ? 'SYS-${f['id']}'
+          : (porCodigo[codigo]! > 1 ? '$codigo-${f['id']}' : codigo);
+      productos.add({
+        'codigo_interno': sku,
+        'nombre': f['nombre'],
+        'categoria': f['categoria'],
+        'precio': f['precio'],
+        'stock': f['stock'],
+      });
+    }
+    return ResultadoLectura(productos, errores);
+  } catch (e) {
+    return ResultadoLectura([], ['No se pudo leer el sistema del cliente: $e']);
+  } finally {
+    cliente.close();
+  }
+}
+
+class FuenteSistema {
+  final String url, email, clave;
+  final List<int> bodegas;
+  FuenteSistema(this.url, this.email, this.clave, this.bodegas);
+}
+
+Future<bool> sincronizarUnaVez(
+    String? archivo, FuenteSistema? sistema, String url, String token, bool simular) async {
+  final marca = DateTime.now().toIso8601String();
+  late final ResultadoLectura lectura;
+  String origen;
+  if (sistema != null) {
+    origen = sistema.url;
+    lectura = await leerSistemaCliente(
+        sistema.url, sistema.email, sistema.clave, sistema.bodegas);
+  } else {
+    origen = archivo!;
+    final f = File(archivo);
+    if (!f.existsSync()) {
+      stderr.writeln('[$marca] No existe el archivo: $archivo');
+      return false;
+    }
+    lectura = leerCsv(utf8.decode(f.readAsBytesSync(), allowMalformed: true));
+  }
   for (final e in lectura.errores) {
     stderr.writeln('[$marca] Aviso: $e');
   }
@@ -122,7 +257,7 @@ Future<bool> sincronizarUnaVez(
     stderr.writeln('[$marca] No hay productos válidos para enviar.');
     return false;
   }
-  print('[$marca] ${lectura.productos.length} productos válidos en $archivo');
+  print('[$marca] ${lectura.productos.length} productos válidos desde $origen');
   if (simular) {
     print('Modo simulación: no se envió nada.');
     return true;
@@ -167,25 +302,52 @@ Future<bool> sincronizarUnaVez(
 }
 
 Future<void> main(List<String> args) async {
-  final archivo = _arg(args, 'archivo') ?? Platform.environment['SYNC_ARCHIVO'];
-  final url = (_arg(args, 'url') ?? Platform.environment['SYNC_URL'] ?? 'http://localhost:8080')
+  final envArchivo = File('.env');
+  final env = envArchivo.existsSync()
+      ? (DotEnv(includePlatformEnvironment: true)..load())
+      : DotEnv(includePlatformEnvironment: true);
+  String? cfg(String k) {
+    final v = env[k];
+    return (v == null || v.isEmpty) ? null : v;
+  }
+
+  final archivo = _arg(args, 'archivo') ?? cfg('SYNC_ARCHIVO');
+  final url = (_arg(args, 'url') ?? cfg('SYNC_URL') ?? 'http://localhost:8080')
       .replaceAll(RegExp(r'/+$'), '');
-  final token = _arg(args, 'token') ?? Platform.environment['SYNC_API_TOKEN'];
+  final token = _arg(args, 'token') ?? cfg('SYNC_API_TOKEN');
   final cada = int.tryParse(_arg(args, 'cada') ?? '');
   final simular = args.contains('--simular');
+  final usarSistema = args.contains('--sistema');
 
-  if (archivo == null || (token == null && !simular)) {
-    stderr.writeln(
-        'Uso: dart run tools/sync_agent.dart --archivo <csv> --url <https://...> --token <token> [--cada 30] [--simular]');
+  FuenteSistema? sistema;
+  if (usarSistema) {
+    final base = (cfg('SISTEMA_URL') ?? 'https://sistema.maykelrepuestos.cl')
+        .replaceAll(RegExp(r'/+$'), '');
+    final email = cfg('SISTEMA_EMAIL');
+    final clave = cfg('SISTEMA_PASS');
+    if (email == null || clave == null) {
+      stderr.writeln('Faltan SISTEMA_EMAIL y SISTEMA_PASS en backend/.env');
+      exit(64);
+    }
+    final bodegas = (cfg('SISTEMA_BODEGAS') ?? '1,2')
+        .split(',')
+        .map((e) => int.tryParse(e.trim()))
+        .whereType<int>()
+        .toList();
+    sistema = FuenteSistema(base, email, clave, bodegas);
+  }
+
+  if ((archivo == null && sistema == null) || (token == null && !simular)) {
+    stderr.writeln('Uso: dart run tools/sync_agent.dart (--sistema | --archivo <csv>) [--url <https://...>] [--token <token>] [--cada 30] [--simular]');
     exit(64);
   }
 
   if (cada == null) {
-    exit(await sincronizarUnaVez(archivo, url, token ?? '', simular) ? 0 : 1);
+    exit(await sincronizarUnaVez(archivo, sistema, url, token ?? '', simular) ? 0 : 1);
   }
   print('Agente activo: sincroniza cada $cada min. Ctrl+C para detener.');
   while (true) {
-    await sincronizarUnaVez(archivo, url, token ?? '', simular);
+    await sincronizarUnaVez(archivo, sistema, url, token ?? '', simular);
     await Future<void>.delayed(Duration(minutes: cada));
   }
 }

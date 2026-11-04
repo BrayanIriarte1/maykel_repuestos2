@@ -1312,14 +1312,40 @@ void main(List<String> args) async {
     int procesados = 0;
     int agotados = 0;
     int nuevosPendientes = 0;
+    final categoriasCache = <String, int>{};
+
+    Future<int?> categoriaIdDe(String? nombre) async {
+      final nom = nombre?.trim() ?? '';
+      if (nom.isEmpty) return null;
+      final clave = nom.toLowerCase();
+      final cacheado = categoriasCache[clave];
+      if (cacheado != null) return cacheado;
+      final fila = await db.conn.execute(
+        Sql.named('SELECT id FROM categorias WHERE nombre ILIKE @n LIMIT 1'),
+        parameters: {'n': nom},
+      );
+      final id = fila.isNotEmpty
+          ? fila.first[0] as int
+          : (await db.conn.execute(
+              Sql.named('INSERT INTO categorias (nombre) VALUES (@n) RETURNING id'),
+              parameters: {'n': nom},
+            ))
+              .first[0] as int;
+      categoriasCache[clave] = id;
+      return id;
+    }
 
     for (final item in lote) {
-      final sku = item['codigo_interno']?.toString().trim();
+      var sku = item['codigo_interno']?.toString().trim();
       final stock = int.tryParse(item['stock'].toString()) ?? 0;
-      final nombre =
-          item['nombre']?.toString().trim() ?? 'Producto sin catalogar';
+      var nombre = item['nombre']?.toString().trim() ?? 'Producto sin catalogar';
+      if (nombre.isEmpty) nombre = 'Producto sin catalogar';
+      if (nombre.length > 180) nombre = nombre.substring(0, 180);
+      final precio = item['precio'] == null ? null : _numDe(item['precio']).toInt();
+      final categoriaId = await categoriaIdDe(item['categoria']?.toString());
 
       if (sku == null || sku.isEmpty) continue;
+      if (sku.length > 60) sku = sku.substring(0, 60);
 
       final existing = await db.conn.execute(
         Sql.named('SELECT id FROM productos WHERE codigo_interno = @sku'),
@@ -1330,21 +1356,30 @@ void main(List<String> args) async {
         await db.conn.execute(
           Sql.named('''
             UPDATE productos 
-            SET stock_actual = @stock, ultima_sincronizacion = CURRENT_TIMESTAMP
+            SET stock_actual = @stock, ultima_sincronizacion = CURRENT_TIMESTAMP,
+                precio_referencia = COALESCE(@precio, precio_referencia),
+                categoria_id = COALESCE(categoria_id, @cat)
             WHERE codigo_interno = @sku
           '''),
-          parameters: {'stock': stock < 0 ? 0 : stock, 'sku': sku},
+          parameters: {
+            'stock': stock < 0 ? 0 : stock,
+            'sku': sku,
+            'precio': precio == null ? null : (precio < 0 ? 0 : precio),
+            'cat': categoriaId,
+          },
         );
       } else {
         await db.conn.execute(
           Sql.named('''
-            INSERT INTO productos (codigo_interno, nombre, stock_actual, estado_catalogo)
-            VALUES (@sku, @nombre, @stock, 'PENDIENTE')
+            INSERT INTO productos (codigo_interno, nombre, stock_actual, estado_catalogo, categoria_id, precio_referencia)
+            VALUES (@sku, @nombre, @stock, 'PENDIENTE', @cat, @precio)
           '''),
           parameters: {
             'sku': sku,
             'nombre': nombre,
-            'stock': stock < 0 ? 0 : stock
+            'stock': stock < 0 ? 0 : stock,
+            'cat': categoriaId,
+            'precio': precio == null || precio < 0 ? 0 : precio,
           },
         );
         nuevosPendientes++;

@@ -1443,6 +1443,27 @@ void main(List<String> args) async {
   });
 
   // ==========================================================================
+  // DOCUMENTACIÓN DE LA API (OpenAPI + Swagger UI)
+  // ==========================================================================
+  router.get('/api/docs/openapi.yaml', (Request req) async {
+    final archivo = File(p.join(_dirBackend, 'docs', 'openapi.yaml'));
+    if (!await archivo.exists()) {
+      return _errorResponse('Especificación no encontrada', status: 404);
+    }
+    return Response.ok(
+      await archivo.readAsString(),
+      headers: {'content-type': 'application/yaml; charset=utf-8'},
+    );
+  });
+
+  router.get('/api/docs', (Request req) {
+    return Response.ok(
+      _paginaSwagger,
+      headers: {'content-type': 'text/html; charset=utf-8'},
+    );
+  });
+
+  // ==========================================================================
   // 10. SERVIDOR ESTÁTICO FLUTTER WEB + PIPELINE DE MIDDLEWARES
   // ==========================================================================
   Handler handler = router.call;
@@ -1467,6 +1488,27 @@ void main(List<String> args) async {
   print(
       '🚀 Servidor Backend Unificado Maykel Repuestos 2 (PostgreSQL) corriendo en http://${server.address.host}:${server.port}');
 }
+/// Swagger UI se carga desde un CDN, por lo que la página requiere internet.
+const String _paginaSwagger = '''<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Maykel Repuestos 2 - Documentación API</title>
+  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
+</head>
+<body>
+  <div id="swagger-ui"></div>
+  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+  <script>
+    window.ui = SwaggerUIBundle({
+      url: '/api/docs/openapi.yaml',
+      dom_id: '#swagger-ui',
+      deepLinking: true
+    });
+  </script>
+</body>
+</html>''';
+
 /// Error de validación de negocio que se devuelve al cliente como 400.
 class _ErrorNegocio implements Exception {
   final String mensaje;

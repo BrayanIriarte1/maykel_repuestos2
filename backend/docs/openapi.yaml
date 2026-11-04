@@ -1,0 +1,973 @@
+openapi: 3.0.3
+info:
+  title: Maykel Repuestos 2 - API REST
+  version: 1.0.0
+  description: |
+    API del catálogo público y del panel de administración de Maykel Repuestos 2 (Calama).
+
+    - **Rutas públicas**: catálogo (sin precios), taxonomía vehicular, reservas y contenido del sitio.
+    - **Rutas `/api/admin/*`**: requieren autenticación **Basic** (usuario y contraseña del panel).
+      Las rutas de `roles` y `usuarios` exigen además el permiso `usuarios`.
+    - **Sincronización de bodega**: `/api/v1/sync/inventory` usa un token **Bearer** (`SYNC_API_TOKEN`).
+
+    Para probar rutas protegidas, pulsa **Authorize** e ingresa tus credenciales.
+servers:
+  - url: /
+    description: Mismo servidor que sirve esta documentación
+tags:
+  - name: Sistema
+    description: Estado del servicio y contenido del sitio
+  - name: Catálogo
+    description: Consulta pública de repuestos y taxonomía vehicular (los precios nunca se exponen)
+  - name: Reservas
+    description: Reservas creadas por clientes desde el sitio público
+  - name: Admin - Sesión
+    description: Verificación de credenciales del panel
+  - name: Admin - Catálogo y stock
+    description: Gestión interna de productos, precio y stock
+  - name: Admin - Reservas y ventas
+    description: Gestión de reservas y ventas en sucursal
+  - name: Admin - Usuarios y roles
+    description: Cuentas del panel y permisos (requiere permiso `usuarios`)
+  - name: Admin - Analítica
+    description: Dashboard y métricas de demanda
+  - name: Sincronización
+    description: Agente local de bodega (ETL de stock)
+paths:
+  /api/health:
+    get:
+      tags: [Sistema]
+      summary: Estado del servicio y de la última sincronización
+      responses:
+        '200':
+          description: Servicio activo
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: {type: string, example: ok}
+                  sucursal: {type: string, example: Maykel Repuestos 2 - Calama}
+                  ultima_sincronizacion: {type: string, format: date-time, nullable: true}
+                  alerta_stock_desactualizado:
+                    type: boolean
+                    description: true si la última sincronización exitosa tiene 2 horas o más
+  /api/estado:
+    get:
+      tags: [Sistema]
+      summary: Total de productos publicados
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  esDatosDeEjemplo: {type: boolean}
+                  totalProductos: {type: integer}
+  /api/contenido:
+    get:
+      tags: [Sistema]
+      summary: Textos editables del sitio público
+      description: Historia, servicios, contacto y aviso legal. Si no hay contenido guardado devuelve el contenido por defecto.
+      responses:
+        '200':
+          description: Contenido del sitio
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contenido'
+  /api/marcas:
+    get:
+      tags: [Catálogo]
+      summary: Lista de marcas activas
+      parameters:
+        - name: formato
+          in: query
+          description: Con `objetos` devuelve `[{id, nombre, origen}]`; si se omite, solo los nombres.
+          schema: {type: string, enum: [objetos]}
+      responses:
+        '200':
+          description: Marcas
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: array
+                    items: {type: string}
+                  - type: array
+                    items:
+                      type: object
+                      properties:
+                        id: {type: integer}
+                        nombre: {type: string}
+                        origen: {type: string}
+  /api/categorias:
+    get:
+      tags: [Catálogo]
+      summary: Lista de categorías
+      parameters:
+        - name: formato
+          in: query
+          description: Con `objetos` devuelve `[{id, nombre, descripcion, es_insumo_minero}]`; si se omite, solo los nombres.
+          schema: {type: string, enum: [objetos]}
+      responses:
+        '200':
+          description: Categorías
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: array
+                    items: {type: string}
+                  - type: array
+                    items:
+                      type: object
+                      properties:
+                        id: {type: integer}
+                        nombre: {type: string}
+                        descripcion: {type: string, nullable: true}
+                        es_insumo_minero: {type: boolean}
+  /api/modelos:
+    get:
+      tags: [Catálogo]
+      summary: Modelos de una marca
+      description: Requiere `marca_id` o `marca`.
+      parameters:
+        - {name: marca_id, in: query, schema: {type: integer}}
+        - {name: marca, in: query, description: Nombre de la marca (sin distinguir mayúsculas), schema: {type: string}}
+      responses:
+        '200':
+          description: Modelos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id: {type: integer}
+                    nombre: {type: string}
+        '400':
+          $ref: '#/components/responses/Error'
+  /api/versiones:
+    get:
+      tags: [Catálogo]
+      summary: Versiones (año, motor, cilindrada) de un modelo
+      parameters:
+        - {name: modelo_id, in: query, required: true, schema: {type: integer}}
+      responses:
+        '200':
+          description: Versiones
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id: {type: integer}
+                    anio: {type: integer}
+                    motor: {type: string}
+                    cilindrada: {type: string}
+        '400':
+          $ref: '#/components/responses/Error'
+  /api/repuestos:
+    get:
+      tags: [Catálogo]
+      summary: Catálogo público de repuestos (sin precios)
+      description: Solo productos con estado `PUBLICADO`. El precio siempre es 0 y `precio_oculto` es true. Si una búsqueda no devuelve resultados, se registra como demanda insatisfecha.
+      parameters:
+        - {name: buscar, in: query, description: Texto en nombre, SKU, código OEM o descripción (alias `q`), schema: {type: string}}
+        - {name: categoria, in: query, description: Id o nombre (alias `categoria_id`), schema: {type: string}}
+        - {name: marca, in: query, description: Id o nombre (alias `marca_id`), schema: {type: string}}
+        - {name: modelo, in: query, description: Id o nombre (alias `modelo_id`), schema: {type: string}}
+        - {name: anio, in: query, schema: {type: integer}}
+        - {name: version_id, in: query, description: Si se envía, ignora marca, modelo y año, schema: {type: integer}}
+        - {name: disponible, in: query, description: '`1` = solo con stock', schema: {type: string, enum: ['1']}}
+      responses:
+        '200':
+          description: Repuestos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RepuestoPublico'
+  /api/productos:
+    get:
+      tags: [Catálogo]
+      summary: Alias de /api/repuestos
+      description: Acepta los mismos parámetros y devuelve la misma respuesta que `/api/repuestos`.
+      parameters:
+        - {name: buscar, in: query, schema: {type: string}}
+        - {name: categoria, in: query, schema: {type: string}}
+        - {name: marca, in: query, schema: {type: string}}
+        - {name: modelo, in: query, schema: {type: string}}
+        - {name: anio, in: query, schema: {type: integer}}
+        - {name: version_id, in: query, schema: {type: integer}}
+        - {name: disponible, in: query, schema: {type: string, enum: ['1']}}
+      responses:
+        '200':
+          description: Repuestos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RepuestoPublico'
+  /api/metricas/agotado:
+    post:
+      tags: [Catálogo]
+      summary: Registra interés en un producto agotado
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                producto_id: {type: integer, example: 3}
+                nombre_producto: {type: string, example: Filtro de aceite Great Wall}
+      responses:
+        '201':
+          description: Registrado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  registrado: {type: boolean, example: true}
+        '400':
+          $ref: '#/components/responses/Error'
+  /api/reservas:
+    post:
+      tags: [Reservas]
+      summary: Crea una reserva (queda pendiente, no descuenta stock)
+      description: |
+        Acepta un único producto (`repuestoId` + `cantidad`) o varios (`items`).
+        Los campos de cliente también se aceptan como `cliente_nombre`, `cliente_telefono` y `cliente_email`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReservaInput'
+      responses:
+        '201':
+          description: Reserva creada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reserva'
+        '400':
+          $ref: '#/components/responses/Error'
+  /api/admin/verificar:
+    get:
+      tags: [Admin - Sesión]
+      summary: Valida credenciales y devuelve permisos
+      security: [{basicAuth: []}]
+      responses:
+        '200':
+          description: Credenciales válidas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SesionAdmin'
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+  /api/admin/contenido:
+    put:
+      tags: [Admin - Catálogo y stock]
+      summary: Guarda el contenido editable del sitio
+      security: [{basicAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Contenido'
+      responses:
+        '200':
+          description: Contenido guardado (se devuelve el mismo objeto)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contenido'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+  /api/admin/repuestos:
+    get:
+      tags: [Admin - Catálogo y stock]
+      summary: Listado interno de productos (con precio y estado)
+      security: [{basicAuth: []}]
+      responses:
+        '200':
+          description: Productos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RepuestoAdmin'
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+    post:
+      tags: [Admin - Catálogo y stock]
+      summary: Crea un producto publicado
+      description: Crea la categoría y la marca si no existen. Si no se indica `sku`, se genera uno.
+      security: [{basicAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nombre]
+              properties:
+                nombre: {type: string, example: Pastillas de freno delanteras}
+                sku: {type: string, example: MR-GW-050}
+                categoria: {type: string, example: Frenos}
+                marca: {type: string, example: Great Wall}
+                modelo: {type: string, example: Wingle 5}
+                precio: {type: integer, minimum: 0, example: 25000}
+                stock: {type: integer, minimum: 0, example: 10}
+      responses:
+        '201':
+          description: Producto creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RepuestoAdmin'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+    put:
+      tags: [Admin - Catálogo y stock]
+      summary: Actualiza precio y/o stock de varios productos
+      security: [{basicAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [cambios]
+              properties:
+                cambios:
+                  type: array
+                  items:
+                    type: object
+                    required: [id]
+                    properties:
+                      id: {type: integer}
+                      precio: {type: integer, minimum: 0}
+                      stock: {type: integer, minimum: 0}
+      responses:
+        '200':
+          $ref: '#/components/responses/Ok'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+  /api/admin/repuestos/{id}:
+    delete:
+      tags: [Admin - Catálogo y stock]
+      summary: Elimina un producto
+      security: [{basicAuth: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer}}
+      responses:
+        '200':
+          $ref: '#/components/responses/Ok'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+  /api/admin/reservas:
+    get:
+      tags: [Admin - Reservas y ventas]
+      summary: Lista todas las reservas
+      security: [{basicAuth: []}]
+      responses:
+        '200':
+          description: Reservas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Reserva'
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+  /api/admin/reservas/{id}:
+    put:
+      tags: [Admin - Reservas y ventas]
+      summary: Cambia el estado de una reserva
+      security: [{basicAuth: []}]
+      parameters:
+        - {name: id, in: path, required: true, description: Folio (ej. RES-0001) o id interno, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [estado]
+              properties:
+                estado: {type: string, enum: [pendiente, confirmada, entregada, rechazada]}
+      responses:
+        '200':
+          description: Estado actualizado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: {type: string}
+                  estado: {type: string}
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+  /api/admin/ventas:
+    get:
+      tags: [Admin - Reservas y ventas]
+      summary: Lista las ventas registradas
+      security: [{basicAuth: []}]
+      responses:
+        '200':
+          description: Ventas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Venta'
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+    post:
+      tags: [Admin - Reservas y ventas]
+      summary: Registra una venta y descuenta stock
+      description: Operación transaccional. Falla si el producto no existe o el stock es insuficiente.
+      security: [{basicAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [repuestoId, cantidad]
+              properties:
+                repuestoId: {type: integer, example: 1}
+                cantidad: {type: integer, minimum: 1, example: 2}
+                cliente: {type: string}
+                metodoPago: {type: string, example: Efectivo}
+                nota: {type: string}
+      responses:
+        '201':
+          description: Venta registrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Venta'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+  /api/admin/roles:
+    get:
+      tags: [Admin - Usuarios y roles]
+      summary: Lista los roles
+      security: [{basicAuth: []}]
+      responses:
+        '200':
+          description: Roles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Rol'
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+    post:
+      tags: [Admin - Usuarios y roles]
+      summary: Crea un rol
+      security: [{basicAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RolInput'
+      responses:
+        '201':
+          description: Rol creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Rol'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+  /api/admin/roles/{id}:
+    put:
+      tags: [Admin - Usuarios y roles]
+      summary: Actualiza un rol
+      security: [{basicAuth: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RolInput'
+      responses:
+        '200':
+          description: Rol actualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Rol'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+    delete:
+      tags: [Admin - Usuarios y roles]
+      summary: Elimina un rol
+      description: No se puede eliminar el rol 1 (Superadministrador) ni un rol con usuarios asignados.
+      security: [{basicAuth: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer}}
+      responses:
+        '200':
+          $ref: '#/components/responses/Ok'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+  /api/admin/usuarios:
+    get:
+      tags: [Admin - Usuarios y roles]
+      summary: Lista los usuarios del panel
+      security: [{basicAuth: []}]
+      responses:
+        '200':
+          description: Usuarios
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Usuario'
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+    post:
+      tags: [Admin - Usuarios y roles]
+      summary: Crea un usuario del panel
+      description: La contraseña se guarda como hash SHA-256 con sal.
+      security: [{basicAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [usuario, password]
+              properties:
+                usuario: {type: string, example: maria}
+                password: {type: string, format: password}
+                nombre: {type: string}
+                rolId: {type: integer, default: 2}
+      responses:
+        '201':
+          description: Usuario creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Usuario'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+  /api/admin/usuarios/{id}:
+    put:
+      tags: [Admin - Usuarios y roles]
+      summary: Actualiza nombre, rol, contraseña o estado activo
+      security: [{basicAuth: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nombre: {type: string}
+                rolId: {type: integer}
+                password: {type: string, format: password}
+                activo: {type: boolean}
+      responses:
+        '200':
+          $ref: '#/components/responses/Ok'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+    delete:
+      tags: [Admin - Usuarios y roles]
+      summary: Elimina un usuario
+      description: No permite que un usuario elimine su propia cuenta.
+      security: [{basicAuth: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer}}
+      responses:
+        '200':
+          $ref: '#/components/responses/Ok'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+  /api/admin/dashboard:
+    get:
+      tags: [Admin - Analítica]
+      summary: Indicadores del dashboard
+      security: [{basicAuth: []}]
+      responses:
+        '200':
+          description: Dashboard
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dashboard'
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+  /api/admin/analytics:
+    get:
+      tags: [Admin - Analítica]
+      summary: Alias de /api/admin/dashboard
+      security: [{basicAuth: []}]
+      responses:
+        '200':
+          description: Dashboard
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dashboard'
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+  /api/v1/sync/inventory:
+    post:
+      tags: [Sincronización]
+      summary: Sincroniza stock desde el agente de bodega
+      description: |
+        Actualiza el stock por `codigo_interno` (SKU). Los SKU desconocidos se crean como `PENDIENTE` de catalogación.
+        Un token inválido se registra como sincronización `RECHAZADO`.
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [productos]
+              properties:
+                productos:
+                  type: array
+                  items:
+                    type: object
+                    required: [codigo_interno, stock]
+                    properties:
+                      codigo_interno: {type: string, example: MR-GW-001}
+                      nombre: {type: string}
+                      stock: {type: integer, example: 7}
+      responses:
+        '200':
+          description: Sincronizado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: {type: string, example: sincronizado}
+                  total_procesados: {type: integer}
+                  total_agotados_marcados: {type: integer}
+                  nuevos_pendientes_catalogacion: {type: integer}
+        '401':
+          description: Token inválido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+components:
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
+      description: Usuario y contraseña del panel de administración
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Valor de `SYNC_API_TOKEN`
+  responses:
+    Ok:
+      description: Operación exitosa
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              ok: {type: boolean, example: true}
+    Error:
+      description: Solicitud inválida
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorBody'
+    NoAutorizado:
+      description: Usuario o contraseña incorrectos
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorBody'
+    Prohibido:
+      description: El rol no tiene el permiso requerido
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorBody'
+  schemas:
+    ErrorBody:
+      type: object
+      properties:
+        error: {type: string, example: JSON inválido}
+    RepuestoPublico:
+      type: object
+      properties:
+        id: {type: integer}
+        sku: {type: string, example: MR-GW-001}
+        codigo: {type: string}
+        codigo_interno: {type: string}
+        codigo_oem: {type: string, nullable: true}
+        nombre: {type: string}
+        descripcion: {type: string}
+        categoria_id: {type: integer, nullable: true}
+        categoria: {type: string}
+        marca: {type: string}
+        modelo: {type: string}
+        precio: {type: integer, example: 0, description: Siempre 0 (precio oculto)}
+        precio_oculto: {type: boolean, example: true}
+        imagen_url: {type: string, nullable: true}
+        stock: {type: integer}
+        disponible: {type: boolean}
+        estado_stock: {type: string, enum: [Disponible, Agotado]}
+        es_insumo_faena: {type: boolean}
+        es_ejemplo: {type: boolean}
+        ultima_sincronizacion: {type: string, format: date-time, nullable: true}
+    RepuestoAdmin:
+      type: object
+      properties:
+        id: {type: integer}
+        sku: {type: string}
+        nombre: {type: string}
+        categoria: {type: string}
+        marca: {type: string}
+        modelo: {type: string}
+        precio: {type: integer, description: Precio de referencia interno}
+        stock: {type: integer}
+        estado_catalogo: {type: string, example: PUBLICADO}
+        es_ejemplo: {type: boolean}
+    ReservaInput:
+      type: object
+      required: [nombre, telefono, email]
+      properties:
+        nombre: {type: string, example: Juan Pérez}
+        telefono: {type: string, example: '56912345678'}
+        email: {type: string, format: email, example: juan@correo.cl}
+        nota: {type: string, example: Great Wall Wingle 5 2018}
+        cliente_rut_o_taller: {type: string}
+        repuestoId: {type: integer, description: Para reservar un solo producto}
+        cantidad: {type: integer, default: 1}
+        items:
+          type: array
+          description: Alternativa para varios productos
+          items:
+            type: object
+            properties:
+              producto_id: {type: integer}
+              cantidad: {type: integer, default: 1}
+              vehiculo_referencia: {type: string}
+    Reserva:
+      type: object
+      properties:
+        id: {type: string, example: RES-0001}
+        folio: {type: string}
+        fecha: {type: string, format: date-time}
+        repuestoId: {type: integer}
+        sku: {type: string}
+        producto: {type: string}
+        cantidad: {type: integer}
+        nombre: {type: string}
+        telefono: {type: string}
+        email: {type: string}
+        nota: {type: string}
+        estado: {type: string, enum: [pendiente, confirmada, entregada, rechazada]}
+    Venta:
+      type: object
+      properties:
+        id: {type: string, description: Folio de la venta}
+        fecha: {type: string, format: date-time}
+        repuestoId: {type: integer}
+        sku: {type: string}
+        producto: {type: string}
+        precio: {type: integer}
+        cantidad: {type: integer}
+        total: {type: integer}
+        cliente: {type: string}
+        metodoPago: {type: string}
+        nota: {type: string}
+    SesionAdmin:
+      type: object
+      properties:
+        ok: {type: boolean}
+        usuario: {type: string}
+        permisos:
+          type: array
+          items: {type: string, enum: [dashboard, catalogo, reservas, stock, usuarios, configuracion]}
+        esSuperAdmin: {type: boolean}
+        rolNombre: {type: string}
+    RolInput:
+      type: object
+      required: [nombre, permisos]
+      properties:
+        nombre: {type: string, example: Vendedor}
+        permisos:
+          type: array
+          items: {type: string, enum: [dashboard, catalogo, reservas, stock, usuarios, configuracion]}
+    Rol:
+      allOf:
+        - type: object
+          properties:
+            id: {type: integer}
+        - $ref: '#/components/schemas/RolInput'
+    Usuario:
+      type: object
+      properties:
+        id: {type: integer}
+        usuario: {type: string}
+        nombre: {type: string}
+        rolId: {type: integer}
+        activo: {type: boolean}
+    Dashboard:
+      type: object
+      properties:
+        totalVentas: {type: integer}
+        montoVentas: {type: number}
+        totalReservas: {type: integer}
+        reservasPendientes: {type: integer}
+        reservasConcretadas: {type: integer}
+        stockBajoCount: {type: integer}
+        agotadosCount: {type: integer}
+        stockBajo:
+          type: array
+          items:
+            type: object
+            properties:
+              id: {type: integer}
+              nombre: {type: string}
+              stock: {type: integer}
+        agotados:
+          type: array
+          items:
+            type: object
+            properties:
+              id: {type: integer}
+              nombre: {type: string}
+        top_repuestos_agotados:
+          type: array
+          items:
+            type: object
+            properties:
+              repuesto: {type: string}
+              consultas: {type: integer}
+        busquedas_sin_resultado:
+          type: array
+          items:
+            type: object
+            properties:
+              termino: {type: string}
+              marca: {type: string}
+              frecuencia: {type: integer}
+    Contenido:
+      type: object
+      description: Estructura completa del contenido editable del sitio
+      properties:
+        textos:
+          type: object
+          additionalProperties: {type: string}
+        historia:
+          type: object
+          properties:
+            titulo: {type: string}
+            texto: {type: string}
+            fichas:
+              type: array
+              items:
+                type: object
+                properties:
+                  etiqueta: {type: string}
+                  valor: {type: string}
+        servicios:
+          type: array
+          items:
+            type: object
+            properties:
+              titulo: {type: string}
+              descripcion: {type: string}
+        contacto:
+          type: object
+          properties:
+            whatsapp: {type: string}
+            email: {type: string}
+            direccion: {type: string}
+            mapsUrl: {type: string}
+            horario: {type: string}
+        avisoLegal:
+          type: object
+          properties:
+            actualizado: {type: string}
+            secciones:
+              type: array
+              items:
+                type: object
+                properties:
+                  titulo: {type: string}
+                  texto: {type: string}
+                  items:
+                    type: array
+                    items: {type: string}

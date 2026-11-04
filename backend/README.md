@@ -68,6 +68,15 @@ Cámbialas desde el panel (Usuarios) antes de usar el sistema en producción.
 | `metricas_demanda` | Búsquedas sin resultado y consultas de productos agotados |
 | `logs_sincronizacion`, `logs_auditoria` | Registro de sincronizaciones de stock y accesos |
 
+## Documentación interactiva (Swagger)
+
+Con el servidor corriendo, abre `http://localhost:8080/api/docs`. Ahí puedes ver
+y probar todos los endpoints; para los de `/api/admin/*` pulsa **Authorize** e
+ingresa usuario y contraseña del panel. La especificación está en
+`docs/openapi.yaml` (y se sirve en `/api/docs/openapi.yaml`). La página carga
+Swagger UI desde un CDN, así que necesita internet. Si cambias o agregas un
+endpoint en `bin/server.dart`, actualiza también ese archivo.
+
 ## Endpoints
 
 Públicos:

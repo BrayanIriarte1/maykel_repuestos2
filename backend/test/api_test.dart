@@ -197,7 +197,8 @@ void main() {
           headers: {...adminHeaders, 'Content-Type': 'text/plain'}, body: 'x');
       expect(tipo.statusCode, anyOf(400, 415));
       final nada = await http.post(u('/api/admin/repuestos/999999999/imagen'),
-          headers: {...adminHeaders, 'Content-Type': 'image/png'}, body: [1, 2, 3]);
+          headers: {...adminHeaders, 'Content-Type': 'image/png'},
+          body: [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A]);
       expect(nada.statusCode, 404);
     });
 
@@ -243,10 +244,150 @@ void main() {
       expect((await sync(0)).statusCode, 200);
       expect((await sync(5)).statusCode, 200);
 
-      final lista =
-          await http.get(u('/api/admin/repuestos'), headers: adminHeaders);
+      final lista = await http.get(u('/api/admin/repuestos?q=$sku'),
+          headers: adminHeaders);
       expect(lista.statusCode, 200);
       expect(lista.body, contains(sku));
+    });
+
+    test('el sync de lotes parciales no deja registro y el final sí', () async {
+      Future<http.Response> sync(Map extra) => http.post(
+            u('/api/v1/sync/inventory'),
+            headers: conToken(syncToken),
+            body: jsonEncode({
+              'productos': [
+                {'codigo_interno': 'TEST-SYNC-001', 'nombre': 'Producto de prueba', 'stock': 2}
+              ],
+              ...extra,
+            }),
+          );
+      Future<int> filas() async {
+        final r = await http.get(u('/api/admin/dashboard'), headers: adminHeaders);
+        return jsonDecode(r.body)['haceSegundos'] as int;
+      }
+
+      expect((await sync({'parcial': true})).statusCode, 200);
+      final antes = await filas();
+      expect((await sync({'resumen': {'procesados': 10}})).statusCode, 200);
+      expect(await filas(), lessThanOrEqualTo(antes));
+    });
+
+    test('lote con elementos inválidos no rompe el servidor', () async {
+      final r = await http.post(u('/api/v1/sync/inventory'),
+          headers: conToken(syncToken),
+          body: jsonEncode({
+            'productos': [1, 'x', null, {'codigo_interno': 'TEST-SYNC-001', 'stock': 'abc'}],
+            'parcial': true,
+          }));
+      expect(r.statusCode, 200);
+    });
+  });
+
+  group('Panel de productos y sesión', () {
+    test('refresh renueva el token y con token falso da 401', () async {
+      final ok = await http.post(u('/api/auth/refresh'), headers: adminHeaders);
+      expect(ok.statusCode, 200);
+      expect(jsonDecode(ok.body)['token'].toString().split('.').length, 3);
+      final mal = await http.post(u('/api/auth/refresh'), headers: conToken('x.y.z'));
+      expect(mal.statusCode, 401);
+    });
+
+    test('/api/estado informa la última sincronización', () async {
+      final r = jsonDecode((await http.get(u('/api/estado'))).body);
+      expect(r['totalProductos'], isA<int>());
+      expect(r['haceSegundos'], anyOf(isNull, isA<int>()));
+    });
+
+    test('la API no se cachea', () async {
+      final r = await http.get(u('/api/estado'));
+      expect(r.headers['cache-control'], contains('no-store'));
+    });
+
+    test('listado admin paginado con filtros', () async {
+      final r = await http.get(u('/api/admin/repuestos?limite=5&pagina=2&stock=agotado'),
+          headers: adminHeaders);
+      expect(r.statusCode, 200);
+      final d = jsonDecode(r.body);
+      expect((d['items'] as List).length, lessThanOrEqualTo(5));
+      expect(d['total'], isA<int>());
+      expect((d['items'] as List).every((p) => p['stock'] == 0), isTrue);
+    });
+
+    test('crear, editar, ocultar y eliminar un producto', () async {
+      const sku = 'TEST-PANEL-001';
+      final c = await http.post(u('/api/admin/repuestos'),
+          headers: adminHeaders,
+          body: jsonEncode({'nombre': 'Producto panel', 'sku': sku, 'stock': 4, 'precio': 1000}));
+      expect(c.statusCode, 201);
+      final id = jsonDecode(c.body)['id'];
+
+      final e = await http.put(u('/api/admin/repuestos/$id'),
+          headers: adminHeaders,
+          body: jsonEncode({'nombre': 'Producto editado', 'precio': 2500, 'stock': 9, 'marca': 'Chery'}));
+      expect(e.statusCode, 200);
+      final neg = await http.put(u('/api/admin/repuestos/$id'),
+          headers: adminHeaders, body: jsonEncode({'stock': -1}));
+      expect(neg.statusCode, 400);
+
+      final h = await http.delete(u('/api/admin/repuestos/$id'), headers: adminHeaders);
+      expect(jsonDecode(h.body)['accion'], 'oculto');
+      final publico = await http.get(u('/api/repuestos?q=$sku'));
+      expect(publico.body, isNot(contains(sku)));
+
+      final d = await http.delete(u('/api/admin/repuestos/$id?definitivo=1'),
+          headers: adminHeaders);
+      expect(jsonDecode(d.body)['accion'], 'eliminado');
+    });
+
+    test('guardado masivo rechaza demasiados cambios', () async {
+      final r = await http.put(u('/api/admin/repuestos'),
+          headers: adminHeaders,
+          body: jsonEncode({'cambios': List.generate(501, (i) => {'id': i + 1})}));
+      expect(r.statusCode, 400);
+    });
+
+    test('una imagen falsa (firma inválida) se rechaza', () async {
+      final r = await http.post(u('/api/admin/repuestos/2/imagen'),
+          headers: {...adminHeaders, 'Content-Type': 'image/png'}, body: 'no soy un png');
+      expect(r.statusCode, 400);
+    });
+
+    test('contraseña débil y rol inexistente al crear usuario → 400', () async {
+      final debil = await http.post(u('/api/admin/usuarios'),
+          headers: adminHeaders,
+          body: jsonEncode({'usuario': 'prueba.debil', 'password': '1234', 'rolId': 2}));
+      expect(debil.statusCode, 400);
+      final rol = await http.post(u('/api/admin/usuarios'),
+          headers: adminHeaders,
+          body: jsonEncode({'usuario': 'prueba.rol', 'password': 'Clave1234', 'rolId': 9999}));
+      expect(rol.statusCode, 400);
+    });
+
+    test('permisos de rol inexistentes se rechazan', () async {
+      final r = await http.post(u('/api/admin/roles'),
+          headers: adminHeaders,
+          body: jsonEncode({'nombre': 'Rol falso', 'permisos': ['dashboard', 'volar']}));
+      expect(r.statusCode, 400);
+    });
+
+    test('reservar un producto agotado → 400', () async {
+      final ag = jsonDecode((await http.get(u('/api/admin/repuestos?limite=1&stock=agotado&estado=PUBLICADO'),
+              headers: adminHeaders))
+          .body);
+      final items = ag['items'] as List;
+      if (items.isEmpty) return;
+      final r = await http.post(u('/api/reservas'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'cliente_nombre': 'Prueba',
+            'cliente_telefono': '+56911111111',
+            'cliente_email': 'prueba@correo.cl',
+            'items': [
+              {'producto_id': items.first['id'], 'cantidad': 1}
+            ],
+          }));
+      expect(r.statusCode, 400);
+      expect(r.body, contains('agotado'));
     });
   });
 }

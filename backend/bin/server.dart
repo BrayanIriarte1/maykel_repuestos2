@@ -4,6 +4,7 @@
 // Cumple IEEE 830 (RF01-RF07, RNF01-RNF06) y 100% compatible con Frontend app/
 // ============================================================================
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -61,6 +62,42 @@ num _numDe(dynamic v, [num porDefecto = 0]) {
   if (v is num) return v;
   return num.tryParse(v.toString()) ?? porDefecto;
 }
+
+/// Política mínima de contraseñas para usuarios del panel.
+String? _validarClaveNueva(String clave) {
+  if (clave.length < 8) return 'La contraseña debe tener al menos 8 caracteres.';
+  if (clave.length > 72) return 'La contraseña no puede superar los 72 caracteres.';
+  if (!RegExp(r'[A-Za-z]').hasMatch(clave) || !RegExp(r'\d').hasMatch(clave)) {
+    return 'La contraseña debe combinar letras y números.';
+  }
+  return null;
+}
+
+Future<bool> _rolExiste(int id) async {
+  final r = await db.conn.execute(
+    Sql.named('SELECT 1 FROM roles WHERE id = @id'),
+    parameters: {'id': id},
+  );
+  return r.isNotEmpty;
+}
+
+/// Comprueba los primeros bytes (firma) para no confiar solo en el Content-Type declarado.
+bool _firmaImagenValida(List<int> b, String ext) {
+  bool empieza(List<int> f) => b.length >= f.length && List.generate(f.length, (i) => b[i] == f[i]).every((x) => x);
+  switch (ext) {
+    case 'jpg':
+      return empieza([0xFF, 0xD8, 0xFF]);
+    case 'png':
+      return empieza([0x89, 0x50, 0x4E, 0x47]);
+    case 'webp':
+      return b.length > 12 && empieza([0x52, 0x49, 0x46, 0x46]) && String.fromCharCodes(b.sublist(8, 12)) == 'WEBP';
+  }
+  return false;
+}
+
+/// Escapa los comodines de LIKE para que "%" o "_" en una búsqueda se traten como texto.
+String _escaparLike(String s) =>
+    s.replaceAll(r'\', r'\\').replaceAll('%', r'\%').replaceAll('_', r'\_');
 
 // ---------- Contraseñas (bcrypt, ver lib/seguridad.dart) ----------
 
@@ -326,6 +363,52 @@ Map<String, dynamic>? _sesionDesdeToken(Request request) {
   };
 }
 
+/// Vuelve a leer rol y estado del usuario en la base (cache de 15 s) para que
+/// desactivar un usuario o cambiarle el rol tenga efecto de inmediato y no
+/// recién cuando venza su token. Devuelve null si ya no puede entrar.
+final Map<String, ({DateTime hasta, Map<String, dynamic>? sesion})> _cacheSesiones = {};
+
+Future<Map<String, dynamic>?> _refrescarSesion(Map<String, dynamic> sesion) async {
+  final usuario = sesion['usuario']?.toString() ?? '';
+  final emergencia = (db.env['ADMIN_USERS'] ?? '')
+      .split(',')
+      .any((par) => par.split(':').first.trim() == usuario);
+  if (emergencia) return sesion;
+
+  final ahora = DateTime.now();
+  final cacheado = _cacheSesiones[usuario];
+  if (cacheado != null && cacheado.hasta.isAfter(ahora)) return cacheado.sesion;
+
+  final rows = await db.conn.execute(
+    Sql.named('''
+      SELECT u.nombre, u.rol, r.nombre, r.permisos
+      FROM usuarios u LEFT JOIN roles r ON u.rol_id = r.id
+      WHERE u.usuario = @usr AND u.activo = TRUE
+    '''),
+    parameters: {'usr': usuario},
+  );
+  Map<String, dynamic>? vigente;
+  if (rows.isNotEmpty) {
+    final r = rows.first;
+    final rolSistema = r[1] as String;
+    final raw = r[3];
+    final permisos = raw is List
+        ? raw.map((e) => e.toString()).toList()
+        : raw is String
+            ? List<String>.from(jsonDecode(raw) as List)
+            : List<String>.from(permisosDisponibles);
+    vigente = {
+      'usuario': usuario,
+      'nombre': r[0],
+      'permisos': permisos,
+      'esSuperAdmin': rolSistema == 'SUPERADMIN',
+      'rolNombre': r[2] ?? rolSistema,
+    };
+  }
+  _cacheSesiones[usuario] = (hasta: ahora.add(const Duration(seconds: 15)), sesion: vigente);
+  return vigente;
+}
+
 /// Convierte cualquier excepción no controlada en un JSON 500 sin filtrar detalles internos.
 Middleware _erroresComoJson() {
   return (Handler inner) {
@@ -340,6 +423,44 @@ Middleware _erroresComoJson() {
       }
     };
   };
+}
+
+/// Cabeceras de seguridad y de caché: la API nunca se cachea (así el stock que
+/// ve el usuario es siempre el real) y el sitio se revalida en cada visita.
+Middleware _cabecerasSeguras() {
+  return (Handler inner) {
+    return (Request request) async {
+      final resp = await inner(request);
+      final ruta = request.url.path;
+      final h = <String, String>{
+        'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options': 'SAMEORIGIN',
+        'Referrer-Policy': 'strict-origin-when-cross-origin',
+      };
+      if (ruta.startsWith('api/')) {
+        h['Cache-Control'] = 'no-store';
+      } else if (ruta.startsWith('media/')) {
+        h['Cache-Control'] = 'public, max-age=31536000, immutable';
+      } else {
+        h['Cache-Control'] = 'no-cache';
+      }
+      return resp.change(headers: h);
+    };
+  };
+}
+
+/// Borra registros antiguos para que las tablas de logs no crezcan sin límite.
+Future<void> _limpiarRegistrosAntiguos() async {
+  try {
+    await db.conn.execute(
+        "DELETE FROM logs_sincronizacion WHERE fecha_inicio < NOW() - INTERVAL '60 days'");
+    await db.conn.execute(
+        "DELETE FROM logs_auditoria WHERE fecha < NOW() - INTERVAL '180 days'");
+    await db.conn.execute(
+        "DELETE FROM metricas_demanda WHERE fecha_evento < NOW() - INTERVAL '365 days'");
+  } catch (e) {
+    print('⚠️ No se pudo limpiar registros antiguos: $e');
+  }
 }
 
 Middleware _authSoloAdmin() {
@@ -357,16 +478,20 @@ Middleware _authSoloAdmin() {
       }
 
       if (request.url.path.startsWith('api/admin/')) {
-        final sesion = _sesionDesdeToken(request);
+        final firmada = _sesionDesdeToken(request);
+        final sesion = firmada == null ? null : await _refrescarSesion(firmada);
         final grupo = request.url.pathSegments.length > 2
             ? request.url.pathSegments[2]
             : '';
         if (sesion != null) {
-          final requerido = permisoPorRuta[grupo];
+          // Ver el catálogo interno (GET) basta con el permiso "catalogo" o "stock".
+          final lecturaCatalogo = grupo == 'repuestos' && request.method == 'GET';
+          final requerido = lecturaCatalogo ? null : permisoPorRuta[grupo];
           final permisos = (sesion['permisos'] as List).cast<String>();
-          if (requerido != null &&
-              sesion['esSuperAdmin'] != true &&
-              !permisos.contains(requerido)) {
+          final sinAcceso = lecturaCatalogo
+              ? !(permisos.contains('catalogo') || permisos.contains('stock'))
+              : (requerido != null && !permisos.contains(requerido));
+          if (sesion['esSuperAdmin'] != true && sinAcceso) {
             await _auditar(sesion['usuario']?.toString(), '/${request.url.path}',
                 request.method, 'DENEGADO_403', _ipDe(request));
             return Response(
@@ -402,6 +527,9 @@ Middleware _authSoloAdmin() {
 
 void main(List<String> args) async {
   await db.init();
+  await db.migrar(_dirBackend);
+  await _limpiarRegistrosAntiguos();
+  Timer.periodic(const Duration(hours: 24), (_) => _limpiarRegistrosAntiguos());
 
   final secreto = db.env['JWT_SECRET'];
   if (secreto == null || secreto.length < 16) {
@@ -451,6 +579,22 @@ void main(List<String> args) async {
     });
   });
 
+  // Renueva la sesión mientras el token siga vigente (el panel lo usa al
+  // recargar la página para no obligar a iniciar sesión otra vez).
+  router.post('/api/auth/refresh', (Request req) async {
+    final firmada = _sesionDesdeToken(req);
+    final sesion = firmada == null ? null : await _refrescarSesion(firmada);
+    if (sesion == null) {
+      return _jsonResponse({'error': 'Sesión no válida o expirada.'}, status: 401);
+    }
+    return _jsonResponse({
+      'token': jwt.emitir(sesion),
+      'tipo': 'Bearer',
+      'expira_en_segundos': jwt.duracion.inSeconds,
+      ...sesion,
+    });
+  });
+
   // ==========================================================================
   // 1. HEALTHCHECK, ESTADO Y CONTENIDO DEL SITIO (RNF04 + Frontend Compañera)
   // ==========================================================================
@@ -484,13 +628,24 @@ void main(List<String> args) async {
   });
 
   router.get('/api/estado', (Request req) async {
-    final countRes = await db.conn.execute(
-      "SELECT COUNT(*) FROM productos WHERE estado_catalogo = 'PUBLICADO'",
-    );
-    final total = _numDe(countRes.first[0]).toInt();
+    final r = await db.conn.execute('''
+      SELECT COUNT(*),
+             COUNT(*) FILTER (WHERE stock_actual > 0),
+             COUNT(*) FILTER (WHERE stock_actual <= 0),
+             (SELECT to_char(MAX(fecha_inicio), 'YYYY-MM-DD"T"HH24:MI:SS"Z"') FROM logs_sincronizacion WHERE estado = 'EXITOSO'),
+             (SELECT EXTRACT(EPOCH FROM (LOCALTIMESTAMP - MAX(fecha_inicio)))::int FROM logs_sincronizacion WHERE estado = 'EXITOSO')
+      FROM productos WHERE estado_catalogo = 'PUBLICADO'
+    ''');
+    final fila = r.first;
     return _jsonResponse({
       'esDatosDeEjemplo': false,
-      'totalProductos': total,
+      'totalProductos': _numDe(fila[0]).toInt(),
+      'disponibles': _numDe(fila[1]).toInt(),
+      'agotados': _numDe(fila[2]).toInt(),
+      // Hora UTC (termina en Z) y segundos transcurridos, para mostrar
+      // "actualizado hace X min" sin depender del reloj del navegador.
+      'ultimaSincronizacion': fila[3],
+      'haceSegundos': fila[4],
     });
   });
 
@@ -616,7 +771,8 @@ void main(List<String> args) async {
   // ==========================================================================
   Future<Response> manejarConsultaCatalogo(Request req) async {
     final qp = req.url.queryParameters;
-    final queryText = (qp['q'] ?? qp['buscar'])?.trim();
+    final queryRaw = (qp['q'] ?? qp['buscar'])?.trim();
+    final queryText = (queryRaw != null && queryRaw.length > 80) ? queryRaw.substring(0, 80) : queryRaw;
     final categoriaParam = qp['categoria_id'] ?? qp['categoria'];
     final marcaParam = qp['marca_id'] ?? qp['marca'];
     final modeloParam = qp['modelo_id'] ?? qp['modelo'];
@@ -630,7 +786,7 @@ void main(List<String> args) async {
     if (queryText != null && queryText.isNotEmpty) {
       conditions.add(
           '(p.nombre ILIKE @q OR p.codigo_interno ILIKE @q OR p.codigo_oem ILIKE @q OR p.descripcion_tecnica ILIKE @q)');
-      params['q'] = '%$queryText%';
+      params['q'] = '%${_escaparLike(queryText)}%';
     }
     if (categoriaParam != null && categoriaParam.isNotEmpty) {
       final catId = int.tryParse(categoriaParam);
@@ -665,7 +821,7 @@ void main(List<String> args) async {
         } else {
           conditions.add(
               '(mo.nombre ILIKE @moNombre OR p.modelo_referencia ILIKE @moNombre)');
-          params['moNombre'] = '%$modeloParam%';
+          params['moNombre'] = '%${_escaparLike(modeloParam)}%';
         }
       }
       if (anio != null) {
@@ -695,7 +851,7 @@ void main(List<String> args) async {
     final limite = int.tryParse(qp['limite'] ?? '');
     final pagina = (int.tryParse(qp['pagina'] ?? '') ?? 1).clamp(1, 100000);
     var total = 0;
-    var paginacion = '';
+    var paginacion = 'LIMIT 1000';
     if (limite != null && limite > 0) {
       final cant = await db.conn.execute(
         Sql.named('SELECT COUNT(DISTINCT p.id) $desde WHERE $whereClause'),
@@ -930,6 +1086,13 @@ void main(List<String> args) async {
         if (prodRow.isEmpty) {
           throw const _ErrorNegocio('El producto seleccionado ya no está disponible');
         }
+        final stockDisp = prodRow.first[2] as int;
+        if (stockDisp <= 0) {
+          throw _ErrorNegocio('"${prodRow.first[1]}" está agotado en este momento.');
+        }
+        if (cant > stockDisp) {
+          throw _ErrorNegocio('Solo quedan $stockDisp unidades de "${prodRow.first[1]}".');
+        }
         primerSku = prodRow.first[0].toString();
         primerProductoNombre = prodRow.first[1].toString();
         primeraCantidad = cant;
@@ -984,23 +1147,31 @@ void main(List<String> args) async {
   });
 
   router.get('/api/admin/reservas', (Request req) async {
+    // Una fila por reserva (antes una reserva con varios repuestos aparecía repetida).
     final rows = await db.conn.execute('''
-      SELECT 
+      SELECT
         r.folio,
         r.creado_en,
-        COALESCE(p.id, 0) AS repuesto_id,
-        COALESCE(p.codigo_interno, 'S/C') AS sku,
-        COALESCE(p.nombre, 'Múltiples repuestos') AS producto,
-        COALESCE(rd.cantidad, 1) AS cantidad,
+        COALESCE(MIN(rd.producto_id), 0) AS repuesto_id,
+        COALESCE(MIN(p.codigo_interno), 'S/C') AS sku,
+        CASE WHEN COUNT(rd.id) > 1
+             THEN MIN(p.nombre) || ' (+' || (COUNT(rd.id) - 1) || ' más)'
+             ELSE COALESCE(MIN(p.nombre), 'Sin repuestos') END AS producto,
+        COALESCE(SUM(rd.cantidad), 1) AS cantidad,
         r.cliente_nombre,
         r.cliente_telefono,
         r.cliente_email,
         COALESCE(r.nota, '') AS nota,
-        LOWER(r.estado) AS estado
+        LOWER(r.estado) AS estado,
+        COALESCE(json_agg(json_build_object(
+          'sku', p.codigo_interno, 'nombre', p.nombre, 'cantidad', rd.cantidad
+        ) ORDER BY rd.id) FILTER (WHERE rd.id IS NOT NULL), '[]'::json) AS items
       FROM reservas r
       LEFT JOIN reserva_detalles rd ON r.id = rd.reserva_id
       LEFT JOIN productos p ON rd.producto_id = p.id
+      GROUP BY r.id
       ORDER BY r.creado_en DESC
+      LIMIT 1000
     ''');
 
     final lista = rows
@@ -1017,6 +1188,7 @@ void main(List<String> args) async {
               'email': r[8],
               'nota': r[9],
               'estado': r[10],
+              'items': r[11] is String ? jsonDecode(r[11] as String) : r[11],
             })
         .toList();
 
@@ -1031,14 +1203,16 @@ void main(List<String> args) async {
       return _errorResponse('Estado inválido');
     }
 
-    await db.conn.execute(
+    final res = await db.conn.execute(
       Sql.named('''
         UPDATE reservas 
         SET estado = @estado, actualizado_en = CURRENT_TIMESTAMP
         WHERE folio = @id OR id::text = @id
+        RETURNING id
       '''),
       parameters: {'estado': estado, 'id': id},
     );
+    if (res.isEmpty) return _errorResponse('Reserva no encontrada', status: 404);
 
     return _jsonResponse({'id': id, 'estado': estado});
   });
@@ -1046,30 +1220,109 @@ void main(List<String> args) async {
   // ==========================================================================
   // 6. BACKOFFICE: GESTIÓN DEL CATÁLOGO TÉCNICO EN POSTGRESQL (HU-07 / RF07)
   // ==========================================================================
+  // Guardado masivo de precio/stock: solo se envían las filas modificadas y
+  // todo se aplica en una única transacción (o se guarda todo, o nada).
   router.put('/api/admin/repuestos', (Request req) async {
     final body = await _leerJsonBody(req);
     final cambios = body?['cambios'];
     if (cambios is! List) return _errorResponse('Formato inválido');
+    if (cambios.length > 500) {
+      return _errorResponse('Máximo 500 cambios por solicitud');
+    }
 
-    for (final cambioRaw in cambios) {
-      final cambio = cambioRaw as Map<String, dynamic>;
-      final id = _numDe(cambio['id']).toInt();
-      if (cambio['precio'] != null) {
-        final precio = _numDe(cambio['precio']).toInt();
-        await db.conn.execute(
-          Sql.named('UPDATE productos SET precio_referencia = @precio WHERE id = @id'),
-          parameters: {'precio': precio < 0 ? 0 : precio, 'id': id},
-        );
+    await db.conn.runTx((tx) async {
+      for (final cambioRaw in cambios.whereType<Map>()) {
+        final cambio = Map<String, dynamic>.from(cambioRaw);
+        final id = _numDe(cambio['id']).toInt();
+        if (id <= 0) continue;
+        if (cambio['precio'] != null) {
+          final precio = _numDe(cambio['precio']).toInt();
+          await tx.execute(
+            Sql.named('UPDATE productos SET precio_referencia = @precio WHERE id = @id'),
+            parameters: {'precio': precio < 0 ? 0 : precio, 'id': id},
+          );
+        }
+        if (cambio['stock'] != null) {
+          final stock = _numDe(cambio['stock']).toInt();
+          await tx.execute(
+            Sql.named('UPDATE productos SET stock_actual = @stock WHERE id = @id'),
+            parameters: {'stock': stock < 0 ? 0 : stock, 'id': id},
+          );
+        }
       }
-      if (cambio['stock'] != null) {
-        final stock = _numDe(cambio['stock']).toInt();
-        await db.conn.execute(
-          Sql.named(
-              'UPDATE productos SET stock_actual = @stock, ultima_sincronizacion = CURRENT_TIMESTAMP WHERE id = @id'),
-          parameters: {'stock': stock < 0 ? 0 : stock, 'id': id},
-        );
+    });
+    return _jsonResponse({'ok': true, 'actualizados': cambios.length});
+  });
+
+  // Edición completa de un producto (nombre, categoría, marca, modelo,
+  // precio, stock y estado de publicación).
+  router.put('/api/admin/repuestos/<id>', (Request req, String id) async {
+    final idNum = int.tryParse(id);
+    final body = await _leerJsonBody(req);
+    if (idNum == null || body == null) return _errorResponse('Datos inválidos');
+
+    final sets = <String>[];
+    final params = <String, dynamic>{'id': idNum};
+
+    final nombre = body['nombre']?.toString().trim();
+    if (nombre != null) {
+      if (nombre.isEmpty || nombre.length > 180) {
+        return _errorResponse('El nombre debe tener entre 1 y 180 caracteres');
+      }
+      sets.add('nombre = @nombre');
+      params['nombre'] = nombre;
+    }
+    for (final (clave, columna) in [('marca', 'marca_referencia'), ('modelo', 'modelo_referencia')]) {
+      final v = body[clave]?.toString().trim();
+      if (v != null) {
+        if (v.length > 80) return _errorResponse('El campo $clave es demasiado largo');
+        sets.add('$columna = @$clave');
+        params[clave] = v.isEmpty ? 'General' : v;
       }
     }
+    if (body['precio'] != null) {
+      final precio = _numDe(body['precio']).toInt();
+      if (precio < 0) return _errorResponse('El precio no puede ser negativo');
+      sets.add('precio_referencia = @precio');
+      params['precio'] = precio;
+    }
+    if (body['stock'] != null) {
+      final stock = _numDe(body['stock']).toInt();
+      if (stock < 0) return _errorResponse('El stock no puede ser negativo');
+      sets.add('stock_actual = @stock');
+      params['stock'] = stock;
+    }
+    final estado = body['estado_catalogo']?.toString().toUpperCase();
+    if (estado != null) {
+      if (!['PUBLICADO', 'OCULTO', 'PENDIENTE'].contains(estado)) {
+        return _errorResponse('Estado de catálogo inválido');
+      }
+      sets.add('estado_catalogo = @estado');
+      params['estado'] = estado;
+    }
+    final categoria = body['categoria']?.toString().trim();
+    if (categoria != null && categoria.isNotEmpty) {
+      final fila = await db.conn.execute(
+        Sql.named('SELECT id FROM categorias WHERE nombre ILIKE @n LIMIT 1'),
+        parameters: {'n': categoria},
+      );
+      final catId = fila.isNotEmpty
+          ? fila.first[0] as int
+          : (await db.conn.execute(
+              Sql.named('INSERT INTO categorias (nombre) VALUES (@n) RETURNING id'),
+              parameters: {'n': categoria},
+            ))
+              .first[0] as int;
+      sets.add('categoria_id = @cat');
+      params['cat'] = catId;
+    }
+    if (sets.isEmpty) return _jsonResponse({'ok': true});
+
+    final res = await db.conn.execute(
+      Sql.named('UPDATE productos SET ${sets.join(', ')} WHERE id = @id RETURNING id'),
+      parameters: params,
+    );
+    if (res.isEmpty) return _errorResponse('Producto no encontrado', status: 404);
     return _jsonResponse({'ok': true});
   });
 
@@ -1162,30 +1415,80 @@ void main(List<String> args) async {
 
   // Listado interno para el panel: incluye precio de referencia (nunca se
   // expone en el catálogo público) y productos ocultos o pendientes.
+  // Paginado en el servidor: ?q=&categoria=&estado=&stock=(agotado|bajo|disponible)&pagina=&limite=
   router.get('/api/admin/repuestos', (Request req) async {
-    final rows = await db.conn.execute('''
-      SELECT p.id, p.codigo_interno, p.nombre, COALESCE(c.nombre, 'General'),
-             p.marca_referencia, p.modelo_referencia, p.precio_referencia,
-             p.stock_actual, p.estado_catalogo, p.imagen_url
-      FROM productos p
-      LEFT JOIN categorias c ON p.categoria_id = c.id
-      ORDER BY p.nombre ASC
-    ''');
-    return _jsonResponse(rows
-        .map((r) => {
-              'id': r[0],
-              'sku': r[1],
-              'nombre': r[2],
-              'categoria': r[3],
-              'marca': r[4] ?? 'General',
-              'modelo': r[5] ?? 'Compatible',
-              'precio': r[6] ?? 0,
-              'stock': r[7],
-              'estado_catalogo': r[8],
-              'imagen_url': r[9],
-              'es_ejemplo': false,
-            })
-        .toList());
+    final qp = req.url.queryParameters;
+    final condiciones = <String>[];
+    final params = <String, dynamic>{};
+
+    final q = (qp['q'] ?? '').trim();
+    if (q.isNotEmpty) {
+      condiciones.add('(p.nombre ILIKE @q OR p.codigo_interno ILIKE @q OR c.nombre ILIKE @q)');
+      params['q'] = '%${_escaparLike(q.length > 80 ? q.substring(0, 80) : q)}%';
+    }
+    final categoria = (qp['categoria'] ?? '').trim();
+    if (categoria.isNotEmpty) {
+      condiciones.add('c.nombre = @cat');
+      params['cat'] = categoria;
+    }
+    final estado = (qp['estado'] ?? '').toUpperCase();
+    if (['PUBLICADO', 'OCULTO', 'PENDIENTE'].contains(estado)) {
+      condiciones.add('p.estado_catalogo = @estado');
+      params['estado'] = estado;
+    }
+    switch (qp['stock']) {
+      case 'agotado':
+        condiciones.add('p.stock_actual <= 0');
+      case 'bajo':
+        condiciones.add('p.stock_actual > 0 AND p.stock_actual <= 3');
+      case 'disponible':
+        condiciones.add('p.stock_actual > 3');
+      case 'sinprecio':
+        condiciones.add('COALESCE(p.precio_referencia, 0) <= 0');
+      case 'sinfoto':
+        condiciones.add("COALESCE(p.imagen_url, '') = ''");
+    }
+    final donde = condiciones.isEmpty ? '' : 'WHERE ${condiciones.join(' AND ')}';
+    final limite = (int.tryParse(qp['limite'] ?? '') ?? 50).clamp(1, 200);
+    final pagina = (int.tryParse(qp['pagina'] ?? '') ?? 1).clamp(1, 100000);
+
+    final desde = 'FROM productos p LEFT JOIN categorias c ON p.categoria_id = c.id $donde';
+    final total = (await db.conn.execute(
+      Sql.named('SELECT COUNT(*) $desde'),
+      parameters: params,
+    ))
+        .first[0] as int;
+    final rows = await db.conn.execute(
+      Sql.named('''
+        SELECT p.id, p.codigo_interno, p.nombre, COALESCE(c.nombre, 'General'),
+               p.marca_referencia, p.modelo_referencia, p.precio_referencia,
+               p.stock_actual, p.estado_catalogo, p.imagen_url
+        $desde
+        ORDER BY p.nombre ASC, p.id ASC
+        LIMIT $limite OFFSET ${(pagina - 1) * limite}
+      '''),
+      parameters: params,
+    );
+    return _jsonResponse({
+      'total': total,
+      'pagina': pagina,
+      'limite': limite,
+      'items': rows
+          .map((r) => {
+                'id': r[0],
+                'sku': r[1],
+                'nombre': r[2],
+                'categoria': r[3],
+                'marca': r[4] ?? 'General',
+                'modelo': r[5] ?? 'Compatible',
+                'precio': r[6] ?? 0,
+                'stock': r[7],
+                'estado_catalogo': r[8],
+                'imagen_url': r[9],
+                'es_ejemplo': false,
+              })
+          .toList(),
+    });
   });
 
   // Sube la foto de un producto (cuerpo = bytes de la imagen; JPG, PNG o WebP, máx. 3 MB).
@@ -1204,6 +1507,9 @@ void main(List<String> args) async {
       }
     }
     if (bytes.isEmpty) return _errorResponse('Imagen vacía');
+    if (!_firmaImagenValida(bytes, ext)) {
+      return _errorResponse('El archivo no es una imagen $ext válida.');
+    }
 
     final existe = await db.conn.execute(
       Sql.named('SELECT 1 FROM productos WHERE id = @id'),
@@ -1239,14 +1545,34 @@ void main(List<String> args) async {
     return _jsonResponse({'ok': true});
   });
 
+  // Por defecto OCULTA el producto (reversible): el sync cada 30 min volvería a
+  // crear un producto borrado. Con ?definitivo=1 se elimina de verdad, solo si
+  // no tiene reservas asociadas.
   router.delete('/api/admin/repuestos/<id>', (Request req, String id) async {
     final idNum = int.tryParse(id);
     if (idNum == null) return _errorResponse('ID inválido');
-    await db.conn.execute(
-      Sql.named('DELETE FROM productos WHERE id = @id'),
+    if (req.url.queryParameters['definitivo'] == '1') {
+      final enUso = await db.conn.execute(
+        Sql.named('SELECT 1 FROM reserva_detalles WHERE producto_id = @id LIMIT 1'),
+        parameters: {'id': idNum},
+      );
+      if (enUso.isNotEmpty) {
+        return _errorResponse(
+            'El producto tiene reservas asociadas: no se puede eliminar, solo ocultar.',
+            status: 409);
+      }
+      await db.conn.execute(
+        Sql.named('DELETE FROM productos WHERE id = @id'),
+        parameters: {'id': idNum},
+      );
+      return _jsonResponse({'ok': true, 'accion': 'eliminado'});
+    }
+    final res = await db.conn.execute(
+      Sql.named("UPDATE productos SET estado_catalogo = 'OCULTO' WHERE id = @id RETURNING id"),
       parameters: {'id': idNum},
     );
-    return _jsonResponse({'ok': true});
+    if (res.isEmpty) return _errorResponse('Producto no encontrado', status: 404);
+    return _jsonResponse({'ok': true, 'accion': 'oculto'});
   });
 
   // ==========================================================================
@@ -1279,9 +1605,17 @@ void main(List<String> args) async {
     final body = await _leerJsonBody(req);
     final nombre = body?['nombre']?.toString().trim() ?? '';
     final permisos = body?['permisos'];
-    if (nombre.isEmpty || permisos is! List) {
+    if (nombre.isEmpty || nombre.length > 60 || permisos is! List) {
       return _errorResponse('Nombre y lista de permisos son obligatorios');
     }
+    if (permisos.any((p) => !permisosDisponibles.contains(p))) {
+      return _errorResponse('La lista contiene permisos que no existen');
+    }
+    final existe = await db.conn.execute(
+      Sql.named('SELECT 1 FROM roles WHERE lower(nombre) = lower(@n)'),
+      parameters: {'n': nombre},
+    );
+    if (existe.isNotEmpty) return _errorResponse('Ya existe un rol con ese nombre', status: 409);
     final res = await db.conn.execute(
       Sql.named(
           'INSERT INTO roles (nombre, permisos) VALUES (@nom, @perm::jsonb) RETURNING id'),
@@ -1297,8 +1631,14 @@ void main(List<String> args) async {
     final body = await _leerJsonBody(req);
     final nombre = body?['nombre']?.toString().trim() ?? '';
     final permisos = body?['permisos'];
-    if (idNum == null || nombre.isEmpty || permisos is! List) {
+    if (idNum == null || nombre.isEmpty || nombre.length > 60 || permisos is! List) {
       return _errorResponse('Nombre y lista de permisos son obligatorios');
+    }
+    if (permisos.any((p) => !permisosDisponibles.contains(p))) {
+      return _errorResponse('La lista contiene permisos que no existen');
+    }
+    if (idNum == 1) {
+      return _errorResponse('El rol Superadministrador no se puede modificar');
     }
     final res = await db.conn.execute(
       Sql.named(
@@ -1306,6 +1646,7 @@ void main(List<String> args) async {
       parameters: {'id': idNum, 'nom': nombre, 'perm': jsonEncode(permisos)},
     );
     if (res.isEmpty) return _errorResponse('Rol no encontrado', status: 404);
+    _cacheSesiones.clear();
     return _jsonResponse({'id': idNum, 'nombre': nombre, 'permisos': permisos});
   });
 
@@ -1354,6 +1695,12 @@ void main(List<String> args) async {
     if (usuario.isEmpty || password.isEmpty) {
       return _errorResponse('Usuario y contraseña obligatorios');
     }
+    if (!RegExp(r'^[A-Za-z0-9._-]{3,40}$').hasMatch(usuario)) {
+      return _errorResponse('El usuario debe tener 3 a 40 caracteres (letras, números, punto, guion).');
+    }
+    final errorClave = _validarClaveNueva(password);
+    if (errorClave != null) return _errorResponse(errorClave);
+    if (!await _rolExiste(rolId)) return _errorResponse('El rol seleccionado no existe');
 
     final existe = await db.conn.execute(
       Sql.named('SELECT 1 FROM usuarios WHERE usuario = @usr'),
@@ -1393,6 +1740,14 @@ void main(List<String> args) async {
     final body = await _leerJsonBody(req);
     if (idNum == null || body == null) return _errorResponse('Datos inválidos');
 
+    final sesionActual = req.context['adminSesion'] as Map<String, dynamic>?;
+    final fila = await db.conn.execute(
+      Sql.named('SELECT usuario FROM usuarios WHERE id = @id'),
+      parameters: {'id': idNum},
+    );
+    if (fila.isEmpty) return _errorResponse('Usuario no encontrado', status: 404);
+    final esPropio = fila.first[0] == sesionActual?['usuario'];
+
     final sets = <String>[];
     final params = <String, dynamic>{'id': idNum};
     final nombre = body['nombre']?.toString().trim();
@@ -1402,6 +1757,10 @@ void main(List<String> args) async {
     }
     if (body['rolId'] != null) {
       final rolId = _numDe(body['rolId']).toInt();
+      if (!await _rolExiste(rolId)) return _errorResponse('El rol seleccionado no existe');
+      if (esPropio && rolId != 1) {
+        return _errorResponse('No puedes quitarte el rol de Superadministrador a ti mismo');
+      }
       sets.add('rol_id = @rolId');
       sets.add('rol = @rol');
       params['rolId'] = rolId;
@@ -1409,10 +1768,15 @@ void main(List<String> args) async {
     }
     final password = body['password']?.toString() ?? '';
     if (password.isNotEmpty) {
+      final errorClave = _validarClaveNueva(password);
+      if (errorClave != null) return _errorResponse(errorClave);
       sets.add('password_hash = @pwd');
       params['pwd'] = hashPassword(password);
     }
     if (body['activo'] is bool) {
+      if (esPropio && body['activo'] == false) {
+        return _errorResponse('No puedes desactivar tu propio usuario');
+      }
       sets.add('activo = @activo');
       params['activo'] = body['activo'];
     }
@@ -1423,6 +1787,7 @@ void main(List<String> args) async {
       parameters: params,
     );
     if (res.isEmpty) return _errorResponse('Usuario no encontrado', status: 404);
+    _cacheSesiones.clear();
     return _jsonResponse({'ok': true});
   });
 
@@ -1442,6 +1807,7 @@ void main(List<String> args) async {
       Sql.named('DELETE FROM usuarios WHERE id = @id'),
       parameters: {'id': idNum},
     );
+    _cacheSesiones.clear();
     return _jsonResponse({'ok': true});
   });
 
@@ -1469,7 +1835,10 @@ void main(List<String> args) async {
     }
 
     final body = await _leerJsonBody(req);
-    final lote = (body?['productos'] as List<dynamic>?) ?? [];
+    final lote = ((body?['productos'] as List<dynamic>?) ?? []).whereType<Map>().toList();
+    if (lote.length > 1000) {
+      return _errorResponse('Máximo 1000 productos por lote', status: 413);
+    }
 
     // Con "publicar": true los productos nuevos salen directo al catálogo.
     final publicar = body?['publicar'] == true;
@@ -1501,7 +1870,7 @@ void main(List<String> args) async {
 
     for (final item in lote) {
       var sku = item['codigo_interno']?.toString().trim();
-      final stock = int.tryParse(item['stock'].toString()) ?? 0;
+      final stock = int.tryParse('${item['stock'] ?? 0}') ?? 0;
       var nombre = item['nombre']?.toString().trim() ?? 'Producto sin catalogar';
       if (nombre.isEmpty) nombre = 'Producto sin catalogar';
       if (nombre.length > 180) nombre = nombre.substring(0, 180);
@@ -1524,6 +1893,10 @@ void main(List<String> args) async {
             SET stock_actual = @stock, ultima_sincronizacion = CURRENT_TIMESTAMP,
                 precio_referencia = COALESCE(@precio, precio_referencia),
                 categoria_id = COALESCE(categoria_id, @cat),
+                nombre = CASE
+                  WHEN right(nombre, length(codigo_interno) + 3) = ' - ' || codigo_interno
+                   AND right(@nombre::text, length(codigo_interno) + 3) <> ' - ' || codigo_interno
+                  THEN @nombre::text ELSE nombre END,
                 marca_referencia = CASE WHEN @marca::text IS NOT NULL AND COALESCE(marca_referencia, 'General') = 'General'
                                         THEN @marca::text ELSE marca_referencia END,
                 modelo_referencia = CASE WHEN @modelo::text IS NOT NULL AND COALESCE(modelo_referencia, 'General') = 'General'
@@ -1533,6 +1906,7 @@ void main(List<String> args) async {
           parameters: {
             'stock': stock < 0 ? 0 : stock,
             'sku': sku,
+            'nombre': nombre,
             'precio': precio == null ? null : (precio < 0 ? 0 : precio),
             'cat': categoriaId,
             'marca': vehiculo?.marca,
@@ -1565,17 +1939,25 @@ void main(List<String> args) async {
       if (stock <= 0) agotados++;
     }
 
-    await db.conn.execute(
-      Sql.named('''
-        INSERT INTO logs_sincronizacion (total_procesados, total_agotados, nuevos_pendientes, estado, mensaje_detalle)
-        VALUES (@proc, @agot, @nuevos, 'EXITOSO', 'Sincronización unidireccional completada')
-      '''),
-      parameters: {
-        'proc': procesados,
-        'agot': agotados,
-        'nuevos': nuevosPendientes
-      },
-    );
+    // Un sync completo llega en lotes: los intermedios envían "parcial": true y
+    // no generan registro; el último trae en "resumen" lo acumulado de los
+    // lotes anteriores y deja UNA sola fila con el total.
+    // Sin esas marcas (agentes antiguos) se registra cada lote.
+    if (body?['parcial'] != true) {
+      final resumen = body?['resumen'] is Map ? body!['resumen'] as Map : const {};
+      int previo(String k) => resumen[k] is num ? (resumen[k] as num).toInt() : 0;
+      await db.conn.execute(
+        Sql.named('''
+          INSERT INTO logs_sincronizacion (total_procesados, total_agotados, nuevos_pendientes, estado, mensaje_detalle)
+          VALUES (@proc, @agot, @nuevos, 'EXITOSO', 'Sincronización unidireccional completada')
+        '''),
+        parameters: {
+          'proc': previo('procesados') + procesados,
+          'agot': previo('agotados') + agotados,
+          'nuevos': previo('nuevos') + nuevosPendientes,
+        },
+      );
+    }
 
     return _jsonResponse({
       'status': 'sincronizado',
@@ -1604,18 +1986,40 @@ void main(List<String> args) async {
     final reservasPendientes = _numDe(resTotales.first[1]).toInt();
     final reservasConcretadas = _numDe(resTotales.first[2]).toInt();
 
+    final conteos = await db.conn.execute('''
+      SELECT COUNT(*) FILTER (WHERE stock_actual > 0 AND stock_actual <= 3),
+             COUNT(*) FILTER (WHERE stock_actual <= 0)
+      FROM productos WHERE estado_catalogo = 'PUBLICADO'
+    ''');
+    final stockBajoCount = _numDe(conteos.first[0]).toInt();
+    final agotadosCount = _numDe(conteos.first[1]).toInt();
+
+    final calidad = await db.conn.execute('''
+      SELECT COUNT(*) FILTER (WHERE estado_catalogo = 'PUBLICADO'),
+             COUNT(*) FILTER (WHERE estado_catalogo = 'PUBLICADO' AND COALESCE(precio_referencia, 0) <= 0),
+             COUNT(*) FILTER (WHERE estado_catalogo = 'PUBLICADO' AND COALESCE(imagen_url, '') = ''),
+             COUNT(*) FILTER (WHERE estado_catalogo = 'OCULTO'),
+             (SELECT to_char(MAX(fecha_inicio), 'YYYY-MM-DD"T"HH24:MI:SS"Z"') FROM logs_sincronizacion WHERE estado = 'EXITOSO'),
+             (SELECT EXTRACT(EPOCH FROM (LOCALTIMESTAMP - MAX(fecha_inicio)))::int FROM logs_sincronizacion WHERE estado = 'EXITOSO')
+      FROM productos
+    ''');
+    final cal = calidad.first;
+
+    // Solo se envían los 50 más urgentes; el total real va en *Count.
     final stockBajoRows = await db.conn.execute('''
-      SELECT id, nombre, stock_actual 
-      FROM productos 
-      WHERE stock_actual > 0 AND stock_actual <= 3 AND estado_catalogo = 'PUBLICADO'
-      ORDER BY stock_actual ASC
+      SELECT p.id, p.nombre, p.stock_actual, COALESCE(c.nombre, 'General')
+      FROM productos p LEFT JOIN categorias c ON c.id = p.categoria_id
+      WHERE p.stock_actual > 0 AND p.stock_actual <= 3 AND p.estado_catalogo = 'PUBLICADO'
+      ORDER BY p.stock_actual ASC, p.nombre ASC
+      LIMIT 50
     ''');
 
     final agotadosRows = await db.conn.execute('''
-      SELECT id, nombre 
-      FROM productos 
-      WHERE es_agotado = TRUE AND estado_catalogo = 'PUBLICADO'
-      ORDER BY nombre ASC
+      SELECT p.id, p.nombre, COALESCE(c.nombre, 'General')
+      FROM productos p LEFT JOIN categorias c ON c.id = p.categoria_id
+      WHERE p.es_agotado = TRUE AND p.estado_catalogo = 'PUBLICADO'
+      ORDER BY p.nombre ASC
+      LIMIT 50
     ''');
 
     final topAgotados = await db.conn.execute('''
@@ -1643,13 +2047,20 @@ void main(List<String> args) async {
       'reservasConcretadas': reservasConcretadas,
       'totalReservas': totalReservas,
       'reservasPendientes': reservasPendientes,
-      'stockBajoCount': stockBajoRows.length,
-      'agotadosCount': agotadosRows.length,
+      'stockBajoCount': stockBajoCount,
+      'agotadosCount': agotadosCount,
+      'productosPublicados': _numDe(cal[0]).toInt(),
+      'sinPrecioCount': _numDe(cal[1]).toInt(),
+      'sinFotoCount': _numDe(cal[2]).toInt(),
+      'ocultosCount': _numDe(cal[3]).toInt(),
+      'ultimaSincronizacion': cal[4],
+      'haceSegundos': cal[5],
       'stockBajo': stockBajoRows
-          .map((r) => {'id': r[0], 'nombre': r[1], 'stock': r[2]})
+          .map((r) => {'id': r[0], 'nombre': r[1], 'stock': r[2], 'categoria': r[3]})
           .toList(),
-      'agotados':
-          agotadosRows.map((r) => {'id': r[0], 'nombre': r[1]}).toList(),
+      'agotados': agotadosRows
+          .map((r) => {'id': r[0], 'nombre': r[1], 'categoria': r[2]})
+          .toList(),
       // Campos de Analítica BI del Informe (HU-06):
       'top_repuestos_agotados': topAgotados
           .map((r) => {'repuesto': r[0], 'consultas': _numDe(r[1]).toInt()})
@@ -1687,14 +2098,16 @@ void main(List<String> args) async {
         'cliente': r[8] ?? '',
         'metodoPago': r[9] ?? '',
         'nota': r[10] ?? '',
+        'categoria': r[11] ?? '',
       };
 
   const columnasVenta =
-      'folio, creado_en, producto_id, sku, producto_nombre, precio_unitario, cantidad, total, cliente, metodo_pago, nota';
+      'folio, creado_en, producto_id, sku, producto_nombre, precio_unitario, cantidad, total, cliente, metodo_pago, nota, '
+      '(SELECT c.nombre FROM productos pr JOIN categorias c ON c.id = pr.categoria_id WHERE pr.id = ventas.producto_id)';
 
   router.get('/api/admin/ventas', (Request req) async {
-    final rows = await db.conn
-        .execute('SELECT $columnasVenta FROM ventas ORDER BY creado_en DESC');
+    final rows = await db.conn.execute(
+        'SELECT $columnasVenta FROM ventas ORDER BY creado_en DESC LIMIT 1000');
     return _jsonResponse(rows.map(ventaAJson).toList());
   });
 
@@ -1797,6 +2210,7 @@ void main(List<String> args) async {
 
   final pipeline = const Pipeline()
       .addMiddleware(logRequests())
+      .addMiddleware(_cabecerasSeguras())
       .addMiddleware(_erroresComoJson())
       .addMiddleware(corsHeaders(headers: {ACCESS_CONTROL_ALLOW_ORIGIN: _origenCors}))
       .addMiddleware(_authSoloAdmin())

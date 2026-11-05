@@ -93,3 +93,19 @@ build, así el sitio funciona aunque no haya internet en la presentación.
   `cd backend` y `dart run tools\importar_imagenes.dart C:\fotos` (agrega
   `--simular` para ver qué haría sin cambiar nada). Se guardan en
   `backend/uploads/productos/` (excluida de Git: respáldala al desplegar).
+
+### Cómo se comporta el panel y el inventario
+
+- **Sesión:** el administrador sigue con sesión al refrescar la página (el token vive en
+  `sessionStorage`, se renueva en `/api/auth/refresh` y se cierra al cerrar la pestaña).
+  Si el servidor la rechaza (venció o desactivaron al usuario) vuelve al inicio con un aviso.
+- **Inventario al día:** el sync con el sistema del cliente corre cada 30 min
+  (tarea `MaykelRepuestos-Sync`). El panel se refresca solo cada minuto y la portada cada
+  2 min; ambos muestran "sincronizado hace X" y avisan si pasan más de 2 h sin novedades.
+- **Stock paginado:** el servidor entrega 25 productos por página con búsqueda y filtros
+  (agotados, stock bajo, sin precio, sin foto, ocultos). Solo se guardan las filas editadas.
+- **Eliminar = ocultar:** así el sync no vuelve a publicar un producto retirado.
+- **Base de datos:** `backend/database/migraciones.sql` se aplica solo al arrancar el servidor
+  (índices de búsqueda, integridad). Los logs antiguos se limpian automáticamente.
+- **Mantenimiento:** `tools\rotar_secretos.dart`, `tools\respaldo.ps1`,
+  `tools\reporte_calidad.dart` y `tools\prueba_carga.dart` (ver `docs/DESPLIEGUE.md`).

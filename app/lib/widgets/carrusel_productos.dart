@@ -37,7 +37,11 @@ class _CarruselProductosState extends State<CarruselProductos> {
   void initState() {
     super.initState();
     if (widget.autoplay) {
-      _timer = Timer.periodic(const Duration(seconds: 4), (_) {
+      _timer = Timer.periodic(const Duration(seconds: 4), (t) {
+        if (!mounted) {
+          t.cancel();
+          return;
+        }
         if (!_pausa) _mover(1, ciclico: true);
       });
     }
@@ -51,7 +55,7 @@ class _CarruselProductosState extends State<CarruselProductos> {
   }
 
   void _mover(int dir, {bool ciclico = false}) {
-    if (!_ctrl.hasClients) return;
+    if (!_ctrl.hasClients || !_ctrl.position.hasContentDimensions) return;
     final paso = (_ancho + _gap) * (MediaQuery.of(context).size.width < 760 ? 1 : 2);
     final max = _ctrl.position.maxScrollExtent;
     var destino = _ctrl.offset + dir * paso;
@@ -183,7 +187,11 @@ class _HeroCarruselState extends State<HeroCarrusel> {
   @override
   void initState() {
     super.initState();
-    _timer = Timer.periodic(const Duration(seconds: 5), (_) {
+    _timer = Timer.periodic(const Duration(seconds: 5), (t) {
+      if (!mounted) {
+        t.cancel();
+        return;
+      }
       if (!_ctrl.hasClients || widget.productos.isEmpty) return;
       final sig = (_actual + 1) % widget.productos.length;
       _ctrl.animateToPage(sig,

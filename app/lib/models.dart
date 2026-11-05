@@ -35,6 +35,7 @@ class Repuesto {
   final num stock;
   final bool esEjemplo;
   final String? imagenUrl;
+  final String estadoCatalogo; // PUBLICADO | OCULTO | PENDIENTE (solo lo trae el panel admin)
   final String? _sku;
 
   Repuesto({
@@ -47,8 +48,11 @@ class Repuesto {
     required this.stock,
     this.esEjemplo = false,
     this.imagenUrl,
+    this.estadoCatalogo = 'PUBLICADO',
     String? sku,
   }) : _sku = sku;
+
+  bool get oculto => estadoCatalogo == 'OCULTO';
 
   /// SKU (código interno) que entrega el backend, p. ej. MR-GW-001.
   String get sku =>
@@ -67,6 +71,7 @@ class Repuesto {
       imagenUrl: (json['imagen_url'] as String?)?.isNotEmpty == true
           ? json['imagen_url'] as String
           : null,
+      estadoCatalogo: json['estado_catalogo'] as String? ?? 'PUBLICADO',
       sku: json['sku'] as String?,
     );
   }
@@ -101,6 +106,7 @@ class Reserva {
   final String email;
   final String nota;
   final String estado; // pendiente | confirmada | entregada
+  final List<({String sku, String nombre, int cantidad})> items;
 
   Reserva({
     required this.id,
@@ -114,6 +120,7 @@ class Reserva {
     required this.email,
     required this.nota,
     required this.estado,
+    this.items = const [],
   });
 
   factory Reserva.fromJson(Map<String, dynamic> json) {
@@ -129,6 +136,14 @@ class Reserva {
       email: json['email'] as String? ?? '',
       nota: json['nota'] as String? ?? '',
       estado: json['estado'] as String? ?? 'pendiente',
+      items: (json['items'] as List<dynamic>? ?? [])
+          .whereType<Map>()
+          .map((e) => (
+                sku: e['sku']?.toString() ?? '',
+                nombre: e['nombre']?.toString() ?? '',
+                cantidad: (e['cantidad'] as num?)?.toInt() ?? 1,
+              ))
+          .toList(),
     );
   }
 }
@@ -146,6 +161,7 @@ class Venta {
   final String cliente;
   final String metodoPago;
   final String nota;
+  final String categoria;
 
   Venta({
     required this.id,
@@ -159,10 +175,12 @@ class Venta {
     required this.cliente,
     required this.metodoPago,
     required this.nota,
+    this.categoria = '',
   });
 
   factory Venta.fromJson(Map<String, dynamic> json) {
     return Venta(
+      categoria: json['categoria'] as String? ?? '',
       id: json['id'] as String,
       fecha: json['fecha'] as String,
       repuestoId: (json['repuestoId'] as num).toInt(),
@@ -183,16 +201,52 @@ class ProductoResumen {
   final int id;
   final String nombre;
   final num? stock;
+  final String categoria;
 
-  ProductoResumen({required this.id, required this.nombre, this.stock});
+  ProductoResumen({required this.id, required this.nombre, this.stock, this.categoria = ''});
 
   factory ProductoResumen.fromJson(Map<String, dynamic> json) {
     return ProductoResumen(
       id: (json['id'] as num).toInt(),
       nombre: json['nombre'] as String? ?? '',
       stock: json['stock'] as num?,
+      categoria: json['categoria'] as String? ?? '',
     );
   }
+}
+
+/// Estado del inventario publicado y de la última sincronización con el sistema del cliente.
+class EstadoInventario {
+  final int total;
+  final int disponibles;
+  final int agotados;
+  final int? haceSegundos;
+
+  const EstadoInventario({
+    required this.total,
+    required this.disponibles,
+    required this.agotados,
+    this.haceSegundos,
+  });
+
+  factory EstadoInventario.fromJson(Map<String, dynamic> json) => EstadoInventario(
+        total: (json['totalProductos'] as num?)?.toInt() ?? 0,
+        disponibles: (json['disponibles'] as num?)?.toInt() ?? 0,
+        agotados: (json['agotados'] as num?)?.toInt() ?? 0,
+        haceSegundos: (json['haceSegundos'] as num?)?.toInt(),
+      );
+
+  /// "hace 5 min", "hace 2 h"… o "sin datos" si nunca se sincronizó.
+  static String textoHace(int? segundos) {
+    if (segundos == null) return 'sin sincronizar';
+    if (segundos < 90) return 'hace un momento';
+    if (segundos < 3600) return 'hace ${segundos ~/ 60} min';
+    if (segundos < 86400) return 'hace ${segundos ~/ 3600} h';
+    return 'hace ${segundos ~/ 86400} d';
+  }
+
+  /// El agente corre cada 30 min: más de 2 h sin novedades es una alerta.
+  bool get desactualizado => haceSegundos == null || haceSegundos! > 7200;
 }
 
 /// Datos agregados del dashboard del panel admin.
@@ -205,6 +259,11 @@ class DashboardData {
   final int agotadosCount;
   final List<ProductoResumen> stockBajo;
   final List<ProductoResumen> agotados;
+  final int productosPublicados;
+  final int sinPrecioCount;
+  final int sinFotoCount;
+  final int ocultosCount;
+  final int? haceSegundos; // desde la última sincronización exitosa
 
   DashboardData({
     required this.totalVentas,
@@ -215,10 +274,20 @@ class DashboardData {
     required this.agotadosCount,
     required this.stockBajo,
     required this.agotados,
+    this.productosPublicados = 0,
+    this.sinPrecioCount = 0,
+    this.sinFotoCount = 0,
+    this.ocultosCount = 0,
+    this.haceSegundos,
   });
 
   factory DashboardData.fromJson(Map<String, dynamic> json) {
     return DashboardData(
+      productosPublicados: (json['productosPublicados'] as num?)?.toInt() ?? 0,
+      sinPrecioCount: (json['sinPrecioCount'] as num?)?.toInt() ?? 0,
+      sinFotoCount: (json['sinFotoCount'] as num?)?.toInt() ?? 0,
+      ocultosCount: (json['ocultosCount'] as num?)?.toInt() ?? 0,
+      haceSegundos: (json['haceSegundos'] as num?)?.toInt(),
       totalVentas: (json['totalVentas'] as num?)?.toInt() ?? 0,
       montoVentas: json['montoVentas'] as num? ?? 0,
       totalReservas: (json['totalReservas'] as num?)?.toInt() ?? 0,

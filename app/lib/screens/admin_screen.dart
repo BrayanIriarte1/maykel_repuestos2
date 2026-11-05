@@ -1,5 +1,6 @@
+import 'dart:async';
+
 import 'package:fl_chart/fl_chart.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../api_service.dart';
@@ -7,6 +8,7 @@ import '../config.dart';
 import '../models.dart';
 import '../utils/format.dart';
 import '../utils/pdf_report.dart';
+import '../widgets/admin_inventario.dart';
 import '../widgets/efectos.dart';
 
 /// Panel de administración con navegación lateral (sidebar), igual que el
@@ -42,44 +44,27 @@ class _AdminScreenState extends State<AdminScreen> {
 
   bool _cargando = true;
   String? _error;
+  Timer? _auto;
+  DateTime? _ultimaActualizacion;
 
-  List<Repuesto> _stock = [];
-  String _busquedaStock = '';
-  int _paginaStock = 0;
-  static const _filasStock = 50;
-
-  List<Repuesto> get _stockFiltrado {
-    final q = _busquedaStock.trim().toLowerCase();
-    if (q.isEmpty) return _stock;
-    return _stock
-        .where((p) =>
-            p.nombre.toLowerCase().contains(q) ||
-            p.sku.toLowerCase().contains(q) ||
-            p.categoria.toLowerCase().contains(q))
-        .toList();
-  }
   List<Reserva> _reservas = [];
   List<Venta> _ventas = [];
   DashboardData? _dashboard;
   List<Rol> _roles = [];
   List<UsuarioAdmin> _usuariosAdmin = [];
 
-  final Map<int, TextEditingController> _precioCtrls = {};
-  final Map<int, TextEditingController> _stockCtrls = {};
-
-  int? _ventaProductoId;
+  // Selector de producto para registrar una venta (búsqueda en el servidor).
+  Repuesto? _ventaProducto;
+  int _ventaBusquedaMarca = 0;
+  int _inventarioVersion = 0;
+  final _ventaBusquedaCtrl = TextEditingController();
+  Timer? _ventaDebounce;
   final _ventaCantidadCtrl = TextEditingController(text: '1');
   final _ventaClienteCtrl = TextEditingController();
   final _ventaMetodoPagoCtrl = TextEditingController();
   bool _registrandoVenta = false;
   String? _resultadoVenta;
   bool _resultadoVentaEsError = false;
-  bool _guardandoStock = false;
-
-  String _busquedaCatalogo = '';
-  int _paginaCatalogo = 0;
-  static const _filasCatalogo = 25;
-
   // Contenido editable del sitio (Configuración): copia local que se edita
   // y solo se manda al backend cuando el usuario presiona "Guardar".
   ContenidoSitio _contenidoEdit = ContenidoSitio.porDefecto();
@@ -122,19 +107,19 @@ class _AdminScreenState extends State<AdminScreen> {
   void initState() {
     super.initState();
     _cargarTodo();
+    // El resumen, las reservas y las ventas se actualizan solos cada minuto
+    // (llegan reservas nuevas y la sincronización cambia el stock).
+    _auto = Timer.periodic(const Duration(seconds: 60), (_) => _cargarResumen());
   }
 
   @override
   void dispose() {
+    _auto?.cancel();
+    _ventaDebounce?.cancel();
+    _ventaBusquedaCtrl.dispose();
     _ventaCantidadCtrl.dispose();
     _ventaClienteCtrl.dispose();
     _ventaMetodoPagoCtrl.dispose();
-    for (final c in _precioCtrls.values) {
-      c.dispose();
-    }
-    for (final c in _stockCtrls.values) {
-      c.dispose();
-    }
     _nombreNegocioCtrl.dispose();
     _heroTituloCtrl.dispose();
     _heroSubtituloCtrl.dispose();
@@ -165,17 +150,42 @@ class _AdminScreenState extends State<AdminScreen> {
     super.dispose();
   }
 
+  /// Pide solo lo que el rol del usuario puede ver, para que un rol limitado
+  /// no rompa todo el panel con un 403.
+  Future<List<Object?>> _pedirDatos() {
+    final s = _sesion;
+    return Future.wait<Object?>([
+      s.puede('reservas') ? ApiService.instance.getReservasAdmin() : Future.value(<Reserva>[]),
+      s.puede('stock') ? ApiService.instance.getVentasAdmin() : Future.value(<Venta>[]),
+      s.puede('dashboard') ? ApiService.instance.getDashboard() : Future.value(null),
+    ]);
+  }
+
+  /// Refresco silencioso (sin spinner) de reservas, ventas y KPIs.
+  Future<void> _cargarResumen() async {
+    if (!mounted || _cargando) return;
+    try {
+      final r = await _pedirDatos();
+      if (!mounted) return;
+      setState(() {
+        _reservas = r[0] as List<Reserva>;
+        _ventas = r[1] as List<Venta>;
+        _dashboard = r[2] as DashboardData?;
+        _ultimaActualizacion = DateTime.now();
+      });
+    } catch (_) {
+      // Un fallo puntual de red no debe molestar: se reintenta en el siguiente ciclo.
+    }
+  }
+
   Future<void> _cargarTodo() async {
     setState(() {
       _cargando = true;
       _error = null;
     });
     try {
-      final resultados = await Future.wait([
-        ApiService.instance.getRepuestosAdmin(),
-        ApiService.instance.getReservasAdmin(),
-        ApiService.instance.getVentasAdmin(),
-        ApiService.instance.getDashboard(),
+      final resultados = await Future.wait<Object?>([
+        _pedirDatos(),
         if (_sesion.puede('usuarios')) ApiService.instance.getRoles() else Future.value(<Rol>[]),
         if (_sesion.puede('usuarios'))
           ApiService.instance.getUsuariosAdmin()
@@ -184,26 +194,20 @@ class _AdminScreenState extends State<AdminScreen> {
         ApiService.instance.getContenido(),
       ]);
 
-      final stock = resultados[0] as List<Repuesto>;
-      _sincronizarControladoresStock(stock);
-      final contenido = resultados[6] as ContenidoSitio;
+      final datos = resultados[0] as List<Object?>;
+      final contenido = resultados[3] as ContenidoSitio;
 
       setState(() {
-        _stock = stock;
-        _reservas = resultados[1] as List<Reserva>;
-        _ventas = resultados[2] as List<Venta>;
-        _dashboard = resultados[3] as DashboardData;
-        _roles = resultados[4] as List<Rol>;
-        _usuariosAdmin = resultados[5] as List<UsuarioAdmin>;
+        _reservas = datos[0] as List<Reserva>;
+        _ventas = datos[1] as List<Venta>;
+        _dashboard = datos[2] as DashboardData?;
+        _roles = resultados[1] as List<Rol>;
+        _usuariosAdmin = resultados[2] as List<UsuarioAdmin>;
         SiteContent.actual = contenido;
         _contenidoEdit = contenido.copiaProfunda();
         _sincronizarControladoresContenido();
         _cargando = false;
-        if (_ventaProductoId == null && _stock.isNotEmpty) {
-          final disponible =
-              _stock.firstWhere((p) => p.stock > 0, orElse: () => _stock.first);
-          _ventaProductoId = disponible.id;
-        }
+        _ultimaActualizacion = DateTime.now();
         // Si la sección activa no está permitida para este usuario, cae a Inicio.
         final seccion = _secciones.firstWhere((s) => s.clave == _seccionActiva);
         if (seccion.permiso != null && !_sesion.puede(seccion.permiso!)) {
@@ -215,15 +219,6 @@ class _AdminScreenState extends State<AdminScreen> {
         _error = e.toString();
         _cargando = false;
       });
-    }
-  }
-
-  void _sincronizarControladoresStock(List<Repuesto> productos) {
-    for (final p in productos) {
-      _precioCtrls.putIfAbsent(
-          p.id, () => TextEditingController(text: p.precio.round().toString()));
-      _stockCtrls.putIfAbsent(
-          p.id, () => TextEditingController(text: p.stock.round().toString()));
     }
   }
 
@@ -323,11 +318,6 @@ class _AdminScreenState extends State<AdminScreen> {
     if (fecha == null) return iso;
     return '${fecha.day.toString().padLeft(2, '0')}/'
         '${fecha.month.toString().padLeft(2, '0')}/${fecha.year}';
-  }
-
-  String _categoriaDe(int repuestoId) {
-    final p = _stock.where((x) => x.id == repuestoId);
-    return p.isEmpty ? 'Otros' : (p.first.categoria.isEmpty ? 'Otros' : p.first.categoria);
   }
 
   @override
@@ -498,8 +488,32 @@ class _AdminScreenState extends State<AdminScreen> {
               style: const TextStyle(
                   fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.char)),
           const Spacer(),
+          if (_ultimaActualizacion != null)
+            Text(
+              'Actualizado ${_ultimaActualizacion!.hour.toString().padLeft(2, '0')}:'
+              '${_ultimaActualizacion!.minute.toString().padLeft(2, '0')}',
+              style: const TextStyle(color: AppColors.steel, fontSize: 12),
+            ),
+          if (_dashboard != null) ...[
+            const SizedBox(width: 12),
+            Tooltip(
+              message: 'Última sincronización con el sistema del cliente',
+              child: Chip(
+                avatar: Icon(Icons.sync,
+                    size: 16,
+                    color: (_dashboard!.haceSegundos == null || _dashboard!.haceSegundos! > 7200)
+                        ? AppColors.warn
+                        : AppColors.ok),
+                label: Text('Sync ${EstadoInventario.textoHace(_dashboard!.haceSegundos)}',
+                    style: const TextStyle(fontSize: 12)),
+                visualDensity: VisualDensity.compact,
+                backgroundColor: Colors.white,
+                side: const BorderSide(color: AppColors.paper2),
+              ),
+            ),
+          ],
           IconButton(
-            onPressed: _cargarTodo,
+            onPressed: _cargarResumen,
             icon: const Icon(Icons.refresh, color: AppColors.steel),
             tooltip: 'Actualizar datos',
           ),
@@ -590,7 +604,7 @@ class _AdminScreenState extends State<AdminScreen> {
               spacing: 14,
               runSpacing: 14,
               children: [
-                _kpiCard('${_stock.length}', 'Productos en catálogo', Icons.inventory_2_outlined),
+                _kpiCard('${d.productosPublicados}', 'Productos publicados', Icons.inventory_2_outlined),
                 _kpiCard('${d.totalVentas}', 'Ventas registradas', Icons.point_of_sale_outlined),
                 _kpiCard('${d.totalReservas}', 'Reservas totales', Icons.event_note_outlined),
                 _kpiCard('${d.agotadosCount}', 'Productos agotados', Icons.report_outlined),
@@ -710,7 +724,7 @@ class _AdminScreenState extends State<AdminScreen> {
   Map<String, num> _montoPorCategoria() {
     final mapa = <String, num>{};
     for (final v in _ventas) {
-      final cat = _categoriaDe(v.repuestoId);
+      final cat = v.categoria.isEmpty ? 'Otros' : v.categoria;
       mapa[cat] = (mapa[cat] ?? 0) + v.total;
     }
     return mapa;
@@ -737,12 +751,16 @@ class _AdminScreenState extends State<AdminScreen> {
     final d = _dashboard;
     if (d == null) return [];
     final insights = <String>[];
-    if (_stock.isNotEmpty) {
-      final pctAgotado = (d.agotadosCount / _stock.length * 100).round();
-      if (d.agotadosCount > 0) {
-        insights.add('El $pctAgotado% de tu catálogo está agotado (${d.agotadosCount} productos). '
-            'Revisa la pestaña Stock para reponerlos.');
-      }
+    if (d.productosPublicados > 0 && d.agotadosCount > 0) {
+      final pctAgotado = (d.agotadosCount / d.productosPublicados * 100).round();
+      insights.add('El $pctAgotado% de tu catálogo está agotado (${d.agotadosCount} productos). '
+          'Revisa la pestaña Stock para reponerlos.');
+    }
+    if (d.sinPrecioCount > 0) {
+      insights.add('${d.sinPrecioCount} producto(s) publicados no tienen precio: pide los valores al cliente.');
+    }
+    if (d.sinFotoCount > 0) {
+      insights.add('${d.sinFotoCount} producto(s) aún no tienen foto. Súbelas desde Stock o con el importador por SKU.');
     }
     final porCategoria = _montoPorCategoria();
     if (porCategoria.isNotEmpty) {
@@ -932,7 +950,7 @@ class _AdminScreenState extends State<AdminScreen> {
                 filas: agotadosConCategoria.isEmpty
                     ? [const ['No hay productos agotados. 🎉', '']]
                     : agotadosConCategoria
-                        .map((p) => [p.nombre, _categoriaDe(p.id)])
+                        .map((p) => [p.nombre, p.categoria.isEmpty ? 'Otros' : p.categoria])
                         .toList(),
               ),
             );
@@ -1031,98 +1049,15 @@ class _AdminScreenState extends State<AdminScreen> {
   // ---------------------------------------------------------------
 
   Widget _buildCatalogoTab() {
-    final termino = _busquedaCatalogo.trim().toLowerCase();
-    final filtrados = _stock
-        .where((p) =>
-            termino.isEmpty ||
-            p.nombre.toLowerCase().contains(termino) ||
-            p.marca.toLowerCase().contains(termino) ||
-            p.sku.toLowerCase().contains(termino))
-        .toList();
-    final paginas = (filtrados.length / _filasCatalogo).ceil().clamp(1, 100000);
-    final pagina = _paginaCatalogo.clamp(0, paginas - 1);
-    final visibles = filtrados.skip(pagina * _filasCatalogo).take(_filasCatalogo).toList();
-
-    return Padding(
+    return ListView(
       padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          TextField(
-            decoration: const InputDecoration(
-              prefixIcon: Icon(Icons.search),
-              hintText: 'Buscar por nombre, marca o SKU...',
-            ),
-            onChanged: (v) => setState(() {
-              _busquedaCatalogo = v;
-              _paginaCatalogo = 0;
-            }),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Text('${filtrados.length} productos',
-                  style: const TextStyle(color: AppColors.steel, fontSize: 12.5)),
-              const Spacer(),
-              IconButton(
-                tooltip: 'Anterior',
-                onPressed: pagina > 0 ? () => setState(() => _paginaCatalogo = pagina - 1) : null,
-                icon: const Icon(Icons.chevron_left),
-              ),
-              Text('Página ${pagina + 1} de $paginas',
-                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-              IconButton(
-                tooltip: 'Siguiente',
-                onPressed: pagina < paginas - 1
-                    ? () => setState(() => _paginaCatalogo = pagina + 1)
-                    : null,
-                icon: const Icon(Icons.chevron_right),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.paper2),
-              ),
-              child: LayoutBuilder(
-                builder: (context, c) => SingleChildScrollView(
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(minWidth: c.maxWidth),
-                      child: DataTable(
-                        columns: const [
-                          DataColumn(label: Text('SKU')),
-                          DataColumn(label: Text('Nombre')),
-                          DataColumn(label: Text('Categoría')),
-                          DataColumn(label: Text('Marca / Modelo')),
-                          DataColumn(label: Text('Precio')),
-                          DataColumn(label: Text('Stock')),
-                        ],
-                        rows: visibles
-                            .map((p) => DataRow(cells: [
-                                  DataCell(Text(p.sku,
-                                      style: const TextStyle(fontFamily: 'monospace', fontSize: 12))),
-                                  DataCell(Text(p.nombre)),
-                                  DataCell(Text(p.categoria)),
-                                  DataCell(Text(p.modelo.isNotEmpty ? '${p.marca} · ${p.modelo}' : p.marca)),
-                                  DataCell(Text(formatCLP(p.precio))),
-                                  DataCell(Text('${p.stock}')),
-                                ]))
-                            .toList(),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
+      children: [
+        InventarioAdmin(
+          key: const ValueKey('inventario-catalogo'),
+          editable: false,
+          onCambio: _cargarResumen,
+        ),
+      ],
     );
   }
 
@@ -1148,27 +1083,64 @@ class _AdminScreenState extends State<AdminScreen> {
             runSpacing: 14,
             children: [
               SizedBox(
-                width: 280,
-                child: DropdownButtonFormField<int>(
-                  value: _ventaProductoId,
-                  isExpanded: true,
-                  decoration: const InputDecoration(labelText: 'Producto'),
-                  items: [
-                    ..._stockFiltrado.where((p) => p.stock > 0).take(60),
-                    ..._stock.where((p) =>
-                        p.id == _ventaProductoId &&
-                        !_stockFiltrado.where((x) => x.stock > 0).take(60).any((x) => x.id == p.id)),
-                  ]
-                      .map((p) => DropdownMenuItem(
-                            value: p.id,
-                            enabled: p.stock > 0,
-                            child: Text(
-                              '${p.nombre} — ${p.stock <= 0 ? "Agotado" : "${p.stock} disp."}',
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ))
-                      .toList(),
-                  onChanged: (v) => setState(() => _ventaProductoId = v),
+                width: 320,
+                child: Autocomplete<Repuesto>(
+                  displayStringForOption: (p) => '${p.nombre} (${p.sku})',
+                  optionsBuilder: (v) async {
+                    final q = v.text.trim();
+                    if (q.length < 2) return const Iterable<Repuesto>.empty();
+                    // Espera 300 ms sin escribir antes de consultar al servidor.
+                    final marca = ++_ventaBusquedaMarca;
+                    await Future<void>.delayed(const Duration(milliseconds: 300));
+                    if (marca != _ventaBusquedaMarca) return const Iterable<Repuesto>.empty();
+                    try {
+                      final r = await ApiService.instance
+                          .getRepuestosAdmin(q: q, stock: 'disponible', limite: 8);
+                      return r.items;
+                    } catch (_) {
+                      return const Iterable<Repuesto>.empty();
+                    }
+                  },
+                  onSelected: (p) => setState(() => _ventaProducto = p),
+                  optionsViewBuilder: (context, onSelected, opciones) => Align(
+                    alignment: Alignment.topLeft,
+                    child: Material(
+                      elevation: 6,
+                      borderRadius: BorderRadius.circular(12),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 420, maxHeight: 320),
+                        child: ListView(
+                          padding: EdgeInsets.zero,
+                          shrinkWrap: true,
+                          children: opciones
+                              .map((p) => ListTile(
+                                    dense: true,
+                                    title: Text(p.nombre, maxLines: 1, overflow: TextOverflow.ellipsis),
+                                    subtitle: Text('${p.sku} · ${p.stock} disp. · ${formatCLP(p.precio)}'),
+                                    onTap: () => onSelected(p),
+                                  ))
+                              .toList(),
+                        ),
+                      ),
+                    ),
+                  ),
+                  fieldViewBuilder: (context, ctrl, foco, _) => TextField(
+                    controller: ctrl,
+                    focusNode: foco,
+                    onChanged: (_) {
+                      if (_ventaProducto != null) setState(() => _ventaProducto = null);
+                    },
+                    decoration: InputDecoration(
+                      labelText: 'Producto (escribe nombre o SKU)',
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: _ventaProducto == null
+                          ? null
+                          : const Icon(Icons.check_circle, color: AppColors.ok),
+                      helperText: _ventaProducto == null
+                          ? null
+                          : '${_ventaProducto!.stock} disponibles · ${formatCLP(_ventaProducto!.precio)} c/u',
+                    ),
+                  ),
                 ),
               ),
               SizedBox(
@@ -1217,11 +1189,11 @@ class _AdminScreenState extends State<AdminScreen> {
   }
 
   Future<void> _registrarVenta() async {
-    final productoId = _ventaProductoId;
+    final productoId = _ventaProducto?.id;
     final cantidad = int.tryParse(_ventaCantidadCtrl.text) ?? 0;
     if (productoId == null || cantidad < 1) {
       setState(() {
-        _resultadoVenta = 'Selecciona un producto y una cantidad válida.';
+        _resultadoVenta = 'Busca y selecciona un producto, e indica una cantidad válida.';
         _resultadoVentaEsError = true;
       });
       return;
@@ -1244,8 +1216,10 @@ class _AdminScreenState extends State<AdminScreen> {
         _resultadoVenta =
             'Venta registrada: ${venta.cantidad} × ${venta.producto} (${formatCLP(venta.total)})';
         _resultadoVentaEsError = false;
+        _ventaProducto = null;
+        _inventarioVersion++; // fuerza a recargar la lista de stock con el descuento
       });
-      await _cargarTodo();
+      await _cargarResumen();
     } catch (e) {
       setState(() {
         _resultadoVenta = 'Error: $e';
@@ -1419,411 +1393,30 @@ class _AdminScreenState extends State<AdminScreen> {
       child: ListView(
         padding: const EdgeInsets.all(24),
         children: [
-          _formularioVenta(),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              const Text('Precio y stock', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-              const Spacer(),
-              OutlinedButton.icon(
-                onPressed: () => _mostrarFormProducto(),
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text('Agregar producto'),
-              ),
-              const SizedBox(width: 10),
-              OutlinedButton.icon(
-                onPressed: _descargarPdfStock,
-                icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
-                label: const Text('Stock en PDF'),
-              ),
-              const SizedBox(width: 10),
-              OutlinedButton.icon(
+          if (_sesion.puede('stock')) ...[
+            _formularioVenta(),
+            const SizedBox(height: 16),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
                 onPressed: _descargarPdfVentas,
                 icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
                 label: const Text('Ventas en PDF'),
               ),
-              const SizedBox(width: 10),
-              ElevatedButton(
-                onPressed: _guardandoStock ? null : _guardarStock,
-                child: _guardandoStock
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : const Text('Guardar cambios'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Builder(builder: (context) {
-            final lista = _stockFiltrado;
-            final paginas = (lista.length / _filasStock).ceil().clamp(1, 100000);
-            final pagina = _paginaStock.clamp(0, paginas - 1);
-            final visibles = lista.skip(pagina * _filasStock).take(_filasStock).toList();
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    SizedBox(
-                      width: 320,
-                      child: TextField(
-                        decoration: const InputDecoration(
-                          prefixIcon: Icon(Icons.search),
-                          hintText: 'Buscar por nombre, SKU o categoría',
-                          isDense: true,
-                        ),
-                        onChanged: (v) => setState(() {
-                          _busquedaStock = v;
-                          _paginaStock = 0;
-                        }),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Text('${lista.length} de ${_stock.length} productos',
-                        style: const TextStyle(color: AppColors.steel, fontSize: 12.5)),
-                    const Spacer(),
-                    IconButton(
-                      tooltip: 'Anterior',
-                      onPressed: pagina > 0 ? () => setState(() => _paginaStock = pagina - 1) : null,
-                      icon: const Icon(Icons.chevron_left),
-                    ),
-                    Text('Página ${pagina + 1} de $paginas'),
-                    IconButton(
-                      tooltip: 'Siguiente',
-                      onPressed:
-                          pagina < paginas - 1 ? () => setState(() => _paginaStock = pagina + 1) : null,
-                      icon: const Icon(Icons.chevron_right),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppColors.paper2),
-                  ),
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: DataTable(
-                      columns: const [
-                        DataColumn(label: Text('SKU')),
-                        DataColumn(label: Text('Nombre')),
-                        DataColumn(label: Text('Categoría')),
-                        DataColumn(label: Text('Precio')),
-                        DataColumn(label: Text('Stock')),
-                        DataColumn(label: Text('Estado')),
-                        DataColumn(label: Text('')),
-                      ],
-                      rows: visibles.map((p) => _filaStock(p)).toList(),
-                    ),
-                  ),
-                ),
-              ],
-            );
-          }),
-        ],
-      ),
-    );
-  }
-
-  DataRow _filaStock(Repuesto p) {
-    final precioCtrl = _precioCtrls[p.id]!;
-    final stockCtrl = _stockCtrls[p.id]!;
-
-    return DataRow(cells: [
-      DataCell(Text(p.sku, style: const TextStyle(fontFamily: 'monospace', fontSize: 12))),
-      DataCell(Text(p.nombre)),
-      DataCell(Text(p.categoria)),
-      DataCell(
-        SizedBox(
-          width: 100,
-          child: TextField(
-            controller: precioCtrl,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(isDense: true),
-            onChanged: (_) => setState(() {}),
-          ),
-        ),
-      ),
-      DataCell(
-        SizedBox(
-          width: 80,
-          child: TextField(
-            controller: stockCtrl,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(isDense: true),
-            onChanged: (_) => setState(() {}),
-          ),
-        ),
-      ),
-      DataCell(_estadoStockBadge(int.tryParse(stockCtrl.text) ?? 0)),
-      DataCell(
-        Row(mainAxisSize: MainAxisSize.min, children: [
-          IconButton(
-            icon: Icon(
-                p.imagenUrl == null ? Icons.add_photo_alternate_outlined : Icons.image,
-                size: 18),
-            tooltip: p.imagenUrl == null ? 'Subir foto' : 'Cambiar foto',
-            onPressed: () => _subirFoto(p),
-          ),
-          IconButton(
-            icon: Icon(Icons.delete_outline, size: 18, color: AppColors.bad),
-            tooltip: 'Eliminar producto',
-            onPressed: () => _eliminarProducto(p),
-          ),
-        ]),
-      ),
-    ]);
-  }
-
-  Future<void> _subirFoto(Repuesto p) async {
-    final sel = await FilePicker.pickFiles(type: FileType.image);
-    if (sel.isEmpty) return;
-    final archivo = sel.first;
-    final ext = (archivo.extension ?? '').toLowerCase();
-    final tipo = ext == 'png' ? 'image/png' : ext == 'webp' ? 'image/webp' : 'image/jpeg';
-    try {
-      final bytes = await archivo.readAsBytes();
-      await ApiService.instance.subirImagenRepuesto(p.id, bytes, tipo);
-      await _cargarTodo();
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('Foto actualizada.')));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
-      }
-    }
-  }
-
-  Widget _estadoStockBadge(int stock) {
-    late final Color color;
-    late final String texto;
-    if (stock <= 0) {
-      color = AppColors.bad;
-      texto = 'Agotado';
-    } else if (stock <= 3) {
-      color = AppColors.warn;
-      texto = 'Stock bajo';
-    } else {
-      color = AppColors.ok;
-      texto = 'Disponible';
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(20)),
-      child: Text(texto,
-          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
-    );
-  }
-
-  Future<void> _guardarStock() async {
-    setState(() => _guardandoStock = true);
-    try {
-      final cambios = _stock
-          .map((p) {
-            final precio = int.tryParse(_precioCtrls[p.id]!.text) ?? 0;
-            final stock = int.tryParse(_stockCtrls[p.id]!.text) ?? 0;
-            return <String, num>{
-              'id': p.id,
-              'precio': precio < 0 ? 0 : precio,
-              'stock': stock < 0 ? 0 : stock,
-            };
-          })
-          .toList();
-
-      await ApiService.instance.guardarCambiosStock(cambios);
-      await _cargarTodo();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Stock y precios actualizados.')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('No se pudo guardar: $e')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _guardandoStock = false);
-    }
-  }
-
-  Future<void> _descargarPdfStock() async {
-    final filas = _stock
-        .map((p) => [
-              p.sku,
-              p.nombre,
-              p.categoria,
-              '${p.marca} ${p.modelo}'.trim(),
-              formatCLP(p.precio),
-              '${p.stock}',
-            ])
-        .toList();
-    await generarReportePdf(
-      titulo: 'Reporte de Stock',
-      columnas: const ['SKU', 'Nombre', 'Categoría', 'Marca / Modelo', 'Precio', 'Stock'],
-      filas: filas,
-    );
-  }
-
-  Future<void> _mostrarFormProducto() async {
-    final nombreCtrl = TextEditingController();
-    final categoriaCtrl = TextEditingController();
-    final marcaCtrl = TextEditingController();
-    final modeloCtrl = TextEditingController();
-    final precioCtrl = TextEditingController(text: '0');
-    final stockCtrl = TextEditingController(text: '0');
-    String? error;
-    bool guardando = false;
-
-    await showDialog(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, setDialogState) => Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 420),
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text('Nuevo producto',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: nombreCtrl,
-                      decoration: const InputDecoration(labelText: 'Nombre'),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: categoriaCtrl,
-                      decoration: const InputDecoration(labelText: 'Categoría'),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: marcaCtrl,
-                      decoration: const InputDecoration(labelText: 'Marca'),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: modeloCtrl,
-                      decoration: const InputDecoration(labelText: 'Modelo'),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: precioCtrl,
-                            keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(labelText: 'Precio'),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: TextField(
-                            controller: stockCtrl,
-                            keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(labelText: 'Stock'),
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (error != null) ...[
-                      const SizedBox(height: 12),
-                      Text(error!, style: TextStyle(color: AppColors.bad, fontSize: 12.5)),
-                    ],
-                    const SizedBox(height: 20),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        TextButton(
-                          onPressed: () => Navigator.of(dialogContext).pop(),
-                          child: const Text('Cancelar'),
-                        ),
-                        const SizedBox(width: 8),
-                        ElevatedButton(
-                          onPressed: guardando
-                              ? null
-                              : () async {
-                                  if (nombreCtrl.text.trim().isEmpty) {
-                                    setDialogState(() => error = 'El nombre es obligatorio.');
-                                    return;
-                                  }
-                                  setDialogState(() {
-                                    guardando = true;
-                                    error = null;
-                                  });
-                                  try {
-                                    await ApiService.instance.crearProducto(
-                                      nombre: nombreCtrl.text.trim(),
-                                      categoria: categoriaCtrl.text.trim(),
-                                      marca: marcaCtrl.text.trim(),
-                                      modelo: modeloCtrl.text.trim(),
-                                      precio: num.tryParse(precioCtrl.text.trim()) ?? 0,
-                                      stock: num.tryParse(stockCtrl.text.trim()) ?? 0,
-                                    );
-                                    if (dialogContext.mounted) Navigator.of(dialogContext).pop();
-                                    await _cargarTodo();
-                                  } catch (e) {
-                                    setDialogState(() {
-                                      guardando = false;
-                                      error = '$e';
-                                    });
-                                  }
-                                },
-                          child: guardando
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                              : const Text('Crear'),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
             ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _eliminarProducto(Repuesto p) async {
-    final confirmar = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Eliminar producto'),
-        content: Text('¿Eliminar "${p.nombre}" (${p.sku})? Esta acción no se puede deshacer.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancelar')),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: Text('Eliminar', style: TextStyle(color: AppColors.bad)),
+            const SizedBox(height: 20),
+          ],
+          const Text('Precio y stock',
+              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+          const SizedBox(height: 12),
+          InventarioAdmin(
+            key: ValueKey('inventario-stock-$_inventarioVersion'),
+            editable: _sesion.puede('stock'),
+            onCambio: _cargarResumen,
           ),
         ],
       ),
     );
-    if (confirmar != true) return;
-    try {
-      await ApiService.instance.eliminarProducto(p.id);
-      await _cargarTodo();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
-      }
-    }
   }
 
   // ---------------------------------------------------------------

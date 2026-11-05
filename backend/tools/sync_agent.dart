@@ -272,14 +272,20 @@ Future<bool> sincronizarUnaVez(
   }
 
   var ok = true;
+  var acumProcesados = 0, acumAgotados = 0, acumNuevos = 0;
+  final totalLotes = (lectura.productos.length / _tamLote).ceil();
   for (var i = 0; i < lectura.productos.length; i += _tamLote) {
     final fin = i + _tamLote > lectura.productos.length
         ? lectura.productos.length
         : i + _tamLote;
     final lote = lectura.productos.sublist(i, fin);
+    final esUltimo = fin >= lectura.productos.length;
     var enviado = false;
     for (var intento = 1; intento <= 3 && !enviado; intento++) {
       try {
+        // Solo el último lote deja registro (con el resumen de todos); si algún
+        // lote anterior falló no se registra, para que el panel avise que el
+        // inventario puede estar desactualizado.
         final r = await http
             .post(
               Uri.parse('$url/api/v1/sync/inventory'),
@@ -287,11 +293,28 @@ Future<bool> sincronizarUnaVez(
                 'Authorization': 'Bearer ' + token,
                 'Content-Type': 'application/json',
               },
-              body: jsonEncode({'productos': lote, 'publicar': sistema != null}),
+              body: jsonEncode({
+                'productos': lote,
+                'publicar': sistema != null,
+                'parcial': !(esUltimo && ok),
+                if (esUltimo)
+                  'resumen': {
+                    'procesados': acumProcesados,
+                    'agotados': acumAgotados,
+                    'nuevos': acumNuevos,
+                  },
+              }),
             )
             .timeout(const Duration(seconds: 30));
         if (r.statusCode == 200) {
-          print('  Lote ${i ~/ _tamLote + 1}: ${r.body}');
+          final n = i ~/ _tamLote + 1;
+          try {
+            final d = jsonDecode(r.body) as Map<String, dynamic>;
+            acumProcesados += (d['total_procesados'] as num?)?.toInt() ?? 0;
+            acumAgotados += (d['total_agotados_marcados'] as num?)?.toInt() ?? 0;
+            acumNuevos += (d['nuevos_pendientes_catalogacion'] as num?)?.toInt() ?? 0;
+          } catch (_) {}
+          if (n == 1 || esUltimo) print('  Lote $n/$totalLotes: ${r.body}');
           enviado = true;
         } else if (r.statusCode == 401 || r.statusCode == 503) {
           stderr.writeln('  Servidor rechazÃ³ el envÃ­o (${r.statusCode}): ${r.body}');

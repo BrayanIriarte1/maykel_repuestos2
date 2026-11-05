@@ -12,7 +12,6 @@ import '../widgets/efectos.dart';
 import '../widgets/mapa_ubicacion.dart';
 import '../widgets/product_card.dart';
 import '../widgets/reserva_dialog.dart';
-import 'admin_screen.dart';
 import 'aviso_legal_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -53,20 +52,76 @@ class _HomeScreenState extends State<HomeScreen> {
   List<(String, int)> _modelos = [];
   List<String> _categoriasLista = [];
   Timer? _debounce;
+  Timer? _autoRefresco;
+  EstadoInventario? _estadoInv;
+  bool _refrescando = false;
 
   @override
   void initState() {
     super.initState();
     _cargarProductos();
     _cargarContenido();
+    _cargarEstado();
+    // El stock cambia con cada sincronización (cada 30 min) y con cada venta:
+    // el catálogo se actualiza solo cada 2 minutos mientras la pestaña esté abierta.
+    _autoRefresco = Timer.periodic(const Duration(minutes: 2), (_) => _refrescarSilencioso());
   }
 
   @override
   void dispose() {
     _debounce?.cancel();
+    _autoRefresco?.cancel();
     _scrollController.dispose();
     _busquedaCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _cargarEstado() async {
+    try {
+      final e = await ApiService.instance.getEstadoInventario();
+      if (mounted) setState(() => _estadoInv = e);
+    } catch (_) {
+      // El indicador es informativo: si falla simplemente no se muestra.
+    }
+  }
+
+  /// Vuelve a pedir lo que se está viendo, sin spinners ni perder la posición.
+  Future<void> _refrescarSilencioso({bool avisar = false}) async {
+    if (_refrescando || _cargandoCat || _cargandoMas) return;
+    setState(() => _refrescando = true);
+    try {
+      final estado = await ApiService.instance.getEstadoInventario();
+      final r = await ApiService.instance.getRepuestosPagina(
+        buscar: _busqueda.trim(),
+        categoria: _categoria,
+        marca: _marca,
+        modelo: _modelo,
+        soloDisponibles: _soloDisponibles,
+        pagina: 1,
+        limite: (_pagina * _porPagina).clamp(_porPagina, 200),
+      );
+      final pool = await ApiService.instance.getRepuestosPagina(limite: 200, soloDisponibles: true);
+      if (!mounted) return;
+      setState(() {
+        _estadoInv = estado;
+        _items = r.items;
+        _total = r.total;
+        _productos = pool.items;
+      });
+      if (avisar) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Inventario actualizado.'), duration: Duration(seconds: 2)),
+        );
+      }
+    } catch (_) {
+      if (avisar && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo actualizar. Revisa tu conexión.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _refrescando = false);
+    }
   }
 
   Future<void> _cargarProductos() async {
@@ -421,11 +476,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _abrirAdmin() async {
-    final ok = await mostrarLoginAdmin(context);
-    if (ok == true && mounted) {
-      await Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const AdminScreen()),
-      );
+    final ok = ApiService.instance.sesionAdminActiva || await mostrarLoginAdmin(context) == true;
+    if (ok && mounted) {
+      await Navigator.of(context).pushNamed('/admin');
       _cargarProductos();
     }
   }
@@ -955,8 +1008,10 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 16),
             _buildFiltros(),
+            const SizedBox(height: 14),
+            _indicadorInventario(),
             if (!_cargandoCat && _errorCat == null) ...[
-              const SizedBox(height: 14),
+              const SizedBox(height: 6),
               Text('$_total producto${_total == 1 ? '' : 's'}',
                   style: const TextStyle(color: AppColors.steel, fontSize: 12.5)),
             ],
@@ -1023,6 +1078,40 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _indicadorInventario() {
+    final e = _estadoInv;
+    final alerta = e?.desactualizado ?? false;
+    final color = e == null ? AppColors.steel : (alerta ? AppColors.warn : AppColors.ok);
+    return Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 6,
+      children: [
+        Container(
+          width: 9,
+          height: 9,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        Text(
+          e == null
+              ? 'Consultando inventario…'
+              : 'Inventario actualizado ${EstadoInventario.textoHace(e.haceSegundos)} · '
+                  '${e.disponibles} disponibles de ${e.total}',
+          style: TextStyle(color: color, fontSize: 12.5, fontWeight: FontWeight.w600),
+        ),
+        InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: _refrescando ? null : () => _refrescarSilencioso(avisar: true),
+          child: Padding(
+            padding: const EdgeInsets.all(4),
+            child: _refrescando
+                ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.refresh, size: 17, color: AppColors.steel),
+          ),
+        ),
+      ],
     );
   }
 

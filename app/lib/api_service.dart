@@ -1,9 +1,12 @@
+import 'dart:async';
 import 'dart:convert';
 
-import 'package:http/http.dart' as http;
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http_pkg;
 
 import 'config.dart';
 import 'models.dart';
+import 'utils/almacen_sesion.dart';
 
 class ApiException implements Exception {
   final String mensaje;
@@ -11,6 +14,25 @@ class ApiException implements Exception {
   @override
   String toString() => mensaje;
 }
+
+/// Cliente HTTP que detecta cuándo el servidor rechaza la sesión (401 en una
+/// petición con credenciales) y avisa a la app para volver al inicio.
+class _ClienteApi extends http_pkg.BaseClient {
+  final http_pkg.Client _interno = http_pkg.Client();
+
+  @override
+  Future<http_pkg.StreamedResponse> send(http_pkg.BaseRequest request) async {
+    final resp = await _interno.send(request);
+    if (resp.statusCode == 401 &&
+        request.headers.containsKey('Authorization') &&
+        !request.url.path.endsWith('/api/auth/login')) {
+      ApiService.instance._sesionExpirada();
+    }
+    return resp;
+  }
+}
+
+final http = _ClienteApi();
 
 /// Cliente HTTP para la API del backend. Guarda las credenciales del
 /// administrador en memoria únicamente (se pierden al recargar la página,
@@ -21,6 +43,14 @@ class ApiService {
 
   String? _authHeader;
   SesionAdmin? _sesion;
+  Timer? _renovador;
+
+  /// Se incrementa cuando el servidor rechaza la sesión; la app escucha para
+  /// volver al inicio y avisar al usuario.
+  final ValueNotifier<int> sesionCerrada = ValueNotifier(0);
+
+  static const _claveToken = 'mr_token';
+  static const _claveSesion = 'mr_sesion';
 
   bool get sesionAdminActiva => _authHeader != null;
   SesionAdmin? get sesion => _sesion;
@@ -49,7 +79,7 @@ class ApiService {
     return (jsonDecode(resp.body) as Map)['imagen_url'] as String;
   }
 
-  String? _mensajeError(http.Response resp) {
+  String? _mensajeError(http_pkg.Response resp) {
     try {
       final data = jsonDecode(resp.body);
       if (data is Map && data['error'] != null) return data['error'].toString();
@@ -142,18 +172,33 @@ class ApiService {
     return (marcas: leer('marcas'), modelos: leer('modelos'));
   }
 
-  /// Listado interno del panel admin: incluye precio de referencia y
-  /// productos ocultos o pendientes (el catálogo público nunca muestra precio).
-  Future<List<Repuesto>> getRepuestosAdmin() async {
-    final resp = await http.get(_uri('/api/admin/repuestos'),
+  /// Listado interno del panel admin (paginado en el servidor): incluye precio de
+  /// referencia y productos ocultos o pendientes. El catálogo público nunca muestra precio.
+  Future<({List<Repuesto> items, int total})> getRepuestosAdmin({
+    String q = '',
+    String categoria = '',
+    String estado = '',
+    String stock = '',
+    int pagina = 1,
+    int limite = 50,
+  }) async {
+    final query = <String, String>{'pagina': '$pagina', 'limite': '$limite'};
+    if (q.trim().isNotEmpty) query['q'] = q.trim();
+    if (categoria.isNotEmpty) query['categoria'] = categoria;
+    if (estado.isNotEmpty) query['estado'] = estado;
+    if (stock.isNotEmpty) query['stock'] = stock;
+    final resp = await http.get(_uri('/api/admin/repuestos', query),
         headers: _headers(admin: true));
     if (resp.statusCode != 200) {
-      throw ApiException('No se pudieron cargar los repuestos.');
+      throw ApiException(_mensajeError(resp) ?? 'No se pudieron cargar los repuestos.');
     }
-    final lista = jsonDecode(resp.body) as List;
-    return lista
-        .map((e) => Repuesto.fromJson(e as Map<String, dynamic>))
-        .toList();
+    final data = jsonDecode(resp.body) as Map<String, dynamic>;
+    return (
+      items: (data['items'] as List)
+          .map((e) => Repuesto.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      total: (data['total'] as num).toInt(),
+    );
   }
 
   // ---------- Reservas ----------
@@ -196,7 +241,7 @@ class ApiService {
     if (resp.statusCode == 200) {
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       _authHeader = 'Bearer ${data['token']}';
-      _sesion = SesionAdmin.fromJson(data);
+      _guardarSesion(data);
       return true;
     }
     if (resp.statusCode == 429) {
@@ -205,10 +250,72 @@ class ApiService {
     return false;
   }
 
-  void logoutAdmin() {
+  void _guardarSesion(Map<String, dynamic> data) {
+    _authHeader = 'Bearer ${data['token']}';
+    _sesion = SesionAdmin.fromJson(data);
+    guardarAlmacen(_claveToken, data['token'].toString());
+    guardarAlmacen(_claveSesion, jsonEncode({
+      'usuario': _sesion!.usuario,
+      'permisos': _sesion!.permisos,
+      'esSuperAdmin': _sesion!.esSuperAdmin,
+      'rolNombre': _sesion!.rolNombre,
+    }));
+    // Mientras el panel esté abierto se renueva el token cada 30 min.
+    _renovador?.cancel();
+    _renovador = Timer.periodic(const Duration(minutes: 30), (_) => renovarSesion());
+  }
+
+  /// Recupera la sesión guardada (al recargar la página) y la valida con el
+  /// servidor. Devuelve true si el administrador sigue con sesión activa.
+  Future<bool> restaurarSesion() async {
+    final token = leerAlmacen(_claveToken);
+    final datos = leerAlmacen(_claveSesion);
+    if (token == null || datos == null) return false;
+    try {
+      _authHeader = 'Bearer $token';
+      _sesion = SesionAdmin.fromJson(jsonDecode(datos) as Map<String, dynamic>);
+    } catch (_) {
+      _borrarSesion();
+      return false;
+    }
+    return renovarSesion();
+  }
+
+  /// Pide un token nuevo (y los permisos vigentes). Si el servidor dice que la
+  /// sesión ya no vale, la cierra.
+  Future<bool> renovarSesion() async {
+    if (_authHeader == null) return false;
+    try {
+      final resp = await http.post(_uri('/api/auth/refresh'), headers: _headers(admin: true));
+      if (resp.statusCode == 200) {
+        _guardarSesion(jsonDecode(resp.body) as Map<String, dynamic>);
+        return true;
+      }
+      if (resp.statusCode == 401) {
+        _borrarSesion();
+        return false;
+      }
+    } catch (_) {
+      // Sin conexión con el servidor: se conserva la sesión y se reintenta luego.
+    }
+    return _authHeader != null;
+  }
+
+  void _borrarSesion() {
     _authHeader = null;
     _sesion = null;
+    _renovador?.cancel();
+    borrarAlmacen(_claveToken);
+    borrarAlmacen(_claveSesion);
   }
+
+  void _sesionExpirada() {
+    if (_authHeader == null) return;
+    _borrarSesion();
+    sesionCerrada.value++;
+  }
+
+  void logoutAdmin() => _borrarSesion();
 
   // ---------- Admin: reservas ----------
 
@@ -287,6 +394,7 @@ class ApiService {
 
   Future<Repuesto> crearProducto({
     required String nombre,
+    String sku = '',
     String categoria = '',
     String marca = '',
     String modelo = '',
@@ -298,6 +406,7 @@ class ApiService {
       headers: _headers(admin: true, json: true),
       body: jsonEncode({
         'nombre': nombre,
+        if (sku.isNotEmpty) 'sku': sku,
         'categoria': categoria,
         'marca': marca,
         'modelo': modelo,
@@ -311,14 +420,36 @@ class ApiService {
     return Repuesto.fromJson(jsonDecode(resp.body) as Map<String, dynamic>);
   }
 
-  Future<void> eliminarProducto(int id) async {
+  /// Oculta el producto del catálogo (reversible). Con [definitivo] lo borra de verdad.
+  Future<void> eliminarProducto(int id, {bool definitivo = false}) async {
     final resp = await http.delete(
-      _uri('/api/admin/repuestos/$id'),
+      _uri('/api/admin/repuestos/$id', definitivo ? {'definitivo': '1'} : null),
       headers: _headers(admin: true),
     );
     if (resp.statusCode != 200) {
       throw ApiException(_mensajeError(resp) ?? 'No se pudo eliminar el producto.');
     }
+  }
+
+  /// Edita campos de un producto (nombre, categoria, marca, modelo, precio, stock, estado_catalogo).
+  Future<void> editarProducto(int id, Map<String, Object?> cambios) async {
+    final resp = await http.put(
+      _uri('/api/admin/repuestos/$id'),
+      headers: _headers(admin: true, json: true),
+      body: jsonEncode(cambios),
+    );
+    if (resp.statusCode != 200) {
+      throw ApiException(_mensajeError(resp) ?? 'No se pudo guardar el producto.');
+    }
+  }
+
+  /// Estado público del inventario: totales y cuándo fue la última sincronización.
+  Future<EstadoInventario> getEstadoInventario() async {
+    final resp = await http.get(_uri('/api/estado'));
+    if (resp.statusCode != 200) {
+      throw ApiException('No se pudo consultar el estado del inventario.');
+    }
+    return EstadoInventario.fromJson(jsonDecode(resp.body) as Map<String, dynamic>);
   }
 
   // ---------- Admin: dashboard ----------

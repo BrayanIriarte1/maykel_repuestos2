@@ -55,7 +55,7 @@ paths:
   /api/estado:
     get:
       tags: [Sistema]
-      summary: Total de productos publicados
+      summary: Estado del inventario publicado y de la última sincronización
       responses:
         '200':
           description: OK
@@ -66,6 +66,10 @@ paths:
                 properties:
                   esDatosDeEjemplo: {type: boolean}
                   totalProductos: {type: integer}
+                  disponibles: {type: integer}
+                  agotados: {type: integer}
+                  ultimaSincronizacion: {type: string, format: date-time, nullable: true}
+                  haceSegundos: {type: integer, nullable: true, description: Segundos desde la última sincronización exitosa}
   /api/contenido:
     get:
       tags: [Sistema]
@@ -286,6 +290,27 @@ paths:
                 $ref: '#/components/schemas/Reserva'
         '400':
           $ref: '#/components/responses/Error'
+  /api/auth/refresh:
+    post:
+      tags: [Admin - Sesión]
+      summary: Renueva el token de una sesión vigente
+      description: El panel lo usa al recargar la página y cada 30 min, para no perder la sesión. Devuelve los permisos actuales del usuario.
+      security: [{basicAuth: []}]
+      responses:
+        '200':
+          description: Sesión renovada
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SesionAdmin'
+                  - type: object
+                    properties:
+                      token: {type: string}
+                      tipo: {type: string, example: Bearer}
+                      expira_en_segundos: {type: integer, example: 28800}
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
   /api/auth/login:
     post:
       tags: [Admin - Sesión]
@@ -367,17 +392,31 @@ paths:
   /api/admin/repuestos:
     get:
       tags: [Admin - Catálogo y stock]
-      summary: Listado interno de productos (con precio y estado)
+      summary: Listado interno paginado de productos (con precio y estado)
+      description: Paginado en el servidor. Filtra por texto, categoría, estado de publicación y situación de stock.
       security: [{basicAuth: []}]
+      parameters:
+        - {name: q, in: query, schema: {type: string}, description: Nombre, SKU o categoría}
+        - {name: categoria, in: query, schema: {type: string}}
+        - {name: estado, in: query, schema: {type: string, enum: [PUBLICADO, OCULTO, PENDIENTE]}}
+        - {name: stock, in: query, schema: {type: string, enum: [agotado, bajo, disponible, sinprecio, sinfoto]}}
+        - {name: pagina, in: query, schema: {type: integer, default: 1}}
+        - {name: limite, in: query, schema: {type: integer, default: 50, maximum: 200}}
       responses:
         '200':
-          description: Productos
+          description: Página de productos
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/RepuestoAdmin'
+                type: object
+                properties:
+                  total: {type: integer}
+                  pagina: {type: integer}
+                  limite: {type: integer}
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RepuestoAdmin'
         '401':
           $ref: '#/components/responses/NoAutorizado'
     post:
@@ -440,12 +479,26 @@ paths:
         '401':
           $ref: '#/components/responses/NoAutorizado'
   /api/admin/repuestos/{id}:
-    delete:
+    put:
       tags: [Admin - Catálogo y stock]
-      summary: Elimina un producto
+      summary: Edita un producto (nombre, categoría, marca, modelo, precio, stock, estado)
       security: [{basicAuth: []}]
       parameters:
         - {name: id, in: path, required: true, schema: {type: integer}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nombre: {type: string, maxLength: 180}
+                categoria: {type: string}
+                marca: {type: string}
+                modelo: {type: string}
+                precio: {type: integer, minimum: 0}
+                stock: {type: integer, minimum: 0}
+                estado_catalogo: {type: string, enum: [PUBLICADO, OCULTO, PENDIENTE]}
       responses:
         '200':
           $ref: '#/components/responses/Ok'
@@ -453,6 +506,30 @@ paths:
           $ref: '#/components/responses/Error'
         '401':
           $ref: '#/components/responses/NoAutorizado'
+        '404':
+          description: Producto no encontrado
+    delete:
+      tags: [Admin - Catálogo y stock]
+      summary: Oculta un producto (o lo elimina con ?definitivo=1)
+      description: >
+        Por defecto el producto pasa a OCULTO y deja de verse en el catálogo (reversible; el
+        sync de 30 min no lo vuelve a publicar). Con `definitivo=1` se borra, salvo que tenga
+        reservas asociadas (409).
+      security: [{basicAuth: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer}}
+        - {name: definitivo, in: query, schema: {type: string, enum: ['1']}}
+      responses:
+        '200':
+          $ref: '#/components/responses/Ok'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+        '404':
+          description: Producto no encontrado
+        '409':
+          description: Tiene reservas asociadas; solo se puede ocultar
   /api/admin/repuestos/{id}/imagen:
     post:
       tags: [Admin - Catálogo y stock]

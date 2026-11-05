@@ -104,6 +104,10 @@ build, así el sitio funciona aunque no haya internet en la presentación.
   2 min; ambos muestran "sincronizado hace X" y avisan si pasan más de 2 h sin novedades.
 - **Stock paginado:** el servidor entrega 25 productos por página con búsqueda y filtros
   (agotados, stock bajo, sin precio, sin foto, ocultos). Solo se guardan las filas editadas.
+- **Reservas y stock:** una reserva nueva queda *pendiente* y no toca el stock. Al pasar a
+  *confirmada* o *entregada* el stock se descuenta (una sola vez); si se *rechaza* o vuelve a
+  *pendiente* se repone. Si no alcanza el stock, el panel avisa y no cambia nada. Mientras una
+  reserva está *confirmada*, el sync de 30 min no devuelve esas unidades al stock.
 - **Eliminar = ocultar:** así el sync no vuelve a publicar un producto retirado.
 - **Base de datos:** `backend/database/migraciones.sql` se aplica solo al arrancar el servidor
   (índices de búsqueda, integridad). Los logs antiguos se limpian automáticamente.

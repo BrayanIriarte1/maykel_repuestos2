@@ -26,6 +26,7 @@ String _tokenDeEnv() {
 }
 
 late Map<String, String> adminHeaders;
+final _sku = 'TEST-RES-${DateTime.now().millisecondsSinceEpoch}';
 
 Uri u(String path) => Uri.parse(base + path);
 
@@ -280,6 +281,76 @@ void main() {
             'parcial': true,
           }));
       expect(r.statusCode, 200);
+    });
+  });
+
+  group('Reservas y stock', () {
+    Future<int> stockDe(int id) async {
+      final r = jsonDecode((await http.get(u('/api/admin/repuestos?q=${Uri.encodeQueryComponent(_sku)}'),
+              headers: adminHeaders))
+          .body);
+      return (r['items'] as List).firstWhere((p) => p['id'] == id)['stock'] as int;
+    }
+
+    Future<Map<String, dynamic>> estado(String folio, String e) async {
+      final r = await http.put(u('/api/admin/reservas/$folio'),
+          headers: adminHeaders, body: jsonEncode({'estado': e}));
+      return {'status': r.statusCode, 'body': jsonDecode(r.body)};
+    }
+
+    test('confirmar/entregar descuenta una vez; rechazar repone; sync respeta lo retenido',
+        () async {
+      final c = await http.post(u('/api/admin/repuestos'),
+          headers: adminHeaders,
+          body: jsonEncode({'nombre': 'Producto flujo reserva', 'sku': _sku, 'stock': 5, 'precio': 1000}));
+      expect(c.statusCode, 201);
+      final id = jsonDecode(c.body)['id'] as int;
+
+      final rv = await http.post(u('/api/reservas'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'cliente_nombre': 'Prueba Stock',
+            'cliente_telefono': '+56911111111',
+            'cliente_email': 'stock@correo.cl',
+            'items': [
+              {'producto_id': id, 'cantidad': 2}
+            ],
+          }));
+      expect(rv.statusCode, 201);
+      final folio = jsonDecode(rv.body)['folio'] as String;
+      expect(await stockDe(id), 5, reason: 'reservar no descuenta');
+
+      expect((await estado(folio, 'confirmada'))['status'], 200);
+      expect(await stockDe(id), 3, reason: 'confirmar descuenta');
+
+      expect((await estado(folio, 'confirmada'))['status'], 200);
+      expect(await stockDe(id), 3, reason: 'repetir el estado no descuenta de nuevo');
+
+      // El sync trae 5 desde el sistema del cliente: se restan las 2 retenidas.
+      final s = await http.post(u('/api/v1/sync/inventory'),
+          headers: conToken(syncToken),
+          body: jsonEncode({
+            'productos': [
+              {'codigo_interno': _sku, 'nombre': 'Producto flujo reserva', 'stock': 5}
+            ],
+            'parcial': true,
+          }));
+      expect(s.statusCode, 200);
+      expect(await stockDe(id), 3, reason: 'el sync no devuelve el stock retenido');
+
+      expect((await estado(folio, 'entregada'))['status'], 200);
+      expect(await stockDe(id), 3, reason: 'entregar tras confirmar no descuenta otra vez');
+
+      expect((await estado(folio, 'rechazada'))['status'], 200);
+      expect(await stockDe(id), 5, reason: 'rechazar repone');
+
+      // Stock insuficiente al confirmar → 409 y sin cambios.
+      await http.put(u('/api/admin/repuestos/$id'), headers: adminHeaders, body: jsonEncode({'stock': 1}));
+      final malo = await estado(folio, 'confirmada');
+      expect(malo['status'], 409);
+      expect(await stockDe(id), 1);
+
+      expect((await estado('RES-NO-EXISTE', 'confirmada'))['status'], 404);
     });
   });
 

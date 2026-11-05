@@ -1319,45 +1319,39 @@ class _AdminScreenState extends State<AdminScreen> {
   }
 
   Widget _estadoDropdown(Reserva r) {
+    const estados = {
+      'pendiente': 'Pendiente',
+      'confirmada': 'Confirmada',
+      'entregada': 'Entregada',
+      'rechazada': 'Rechazada',
+    };
     return DropdownButton<String>(
-      value: r.estado,
+      value: estados.containsKey(r.estado) ? r.estado : 'pendiente',
       underline: const SizedBox.shrink(),
-      items: const [
-        DropdownMenuItem(value: 'pendiente', child: Text('Pendiente')),
-        DropdownMenuItem(value: 'confirmada', child: Text('Confirmada')),
-        DropdownMenuItem(value: 'entregada', child: Text('Entregada')),
+      items: [
+        for (final e in estados.entries) DropdownMenuItem(value: e.key, child: Text(e.value)),
       ],
       onChanged: (nuevoEstado) async {
-        if (nuevoEstado == null) return;
+        if (nuevoEstado == null || nuevoEstado == r.estado) return;
         try {
-          await ApiService.instance.actualizarEstadoReserva(r.id, nuevoEstado);
-          setState(() {
-            final indice = _reservas.indexWhere((x) => x.id == r.id);
-            if (indice >= 0) {
-              _reservas[indice] = Reserva(
-                id: r.id,
-                fecha: r.fecha,
-                repuestoId: r.repuestoId,
-                sku: r.sku,
-                producto: r.producto,
-                cantidad: r.cantidad,
-                nombre: r.nombre,
-                telefono: r.telefono,
-                email: r.email,
-                nota: r.nota,
-                estado: nuevoEstado,
-              );
-            }
-          });
+          final ajustes = await ApiService.instance.actualizarEstadoReserva(r.id, nuevoEstado);
+          // Las reservas, el resumen y la lista de stock se vuelven a pedir: el stock pudo cambiar.
+          setState(() => _inventarioVersion++);
+          await _cargarResumen();
           if (mounted) {
+            final detalle = ajustes.isEmpty
+                ? ''
+                : ' Stock ${ajustes.first['cantidad'] < 0 ? 'descontado' : 'repuesto'}: '
+                    '${ajustes.map((a) => '${a['producto']} (${a['cantidad'] > 0 ? '+' : ''}${a['cantidad']} → ${a['stock']})').join(', ')}.';
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Estado de la reserva actualizado.')),
+              SnackBar(content: Text('Reserva ${r.id} ${estados[nuevoEstado]!.toLowerCase()}.$detalle')),
             );
           }
         } catch (e) {
+          await _cargarResumen();
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('No se pudo actualizar: $e')),
+              SnackBar(content: Text('No se pudo actualizar: $e'), backgroundColor: AppColors.bad),
             );
           }
         }

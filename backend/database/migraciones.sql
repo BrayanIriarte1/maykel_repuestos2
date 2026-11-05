@@ -44,3 +44,7 @@ ALTER TABLE productos ADD CONSTRAINT productos_precio_no_negativo
 ALTER TABLE productos DROP CONSTRAINT IF EXISTS productos_nombre_no_vacio;
 ALTER TABLE productos ADD CONSTRAINT productos_nombre_no_vacio
   CHECK (length(btrim(nombre)) > 0) NOT VALID;
+
+-- Reservas: indica si ya se descontó su stock (confirmada/entregada), para no descontar dos veces.
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS stock_descontado BOOLEAN NOT NULL DEFAULT FALSE;
+CREATE INDEX IF NOT EXISTS idx_reservas_retenidas ON reservas (id) WHERE stock_descontado;

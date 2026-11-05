@@ -416,7 +416,7 @@ Middleware _erroresComoJson() {
       try {
         return await inner(request);
       } on _ErrorNegocio catch (e) {
-        return _errorResponse(e.mensaje);
+        return _errorResponse(e.mensaje, status: e.status);
       } catch (e, st) {
         print('❌ ${request.method} /${request.url.path}: $e\n$st');
         return _errorResponse('Error interno del servidor.', status: 500);
@@ -1195,6 +1195,9 @@ void main(List<String> args) async {
     return _jsonResponse(lista);
   });
 
+  // Estados que retienen stock: confirmada (apartado) y entregada (vendido).
+  // El descuento se hace una sola vez (reservas.stock_descontado) y se repone si
+  // la reserva vuelve a pendiente o se rechaza.
   router.put('/api/admin/reservas/<id>', (Request req, String id) async {
     final body = await _leerJsonBody(req);
     final estado = body?['estado']?.toString().toLowerCase();
@@ -1202,19 +1205,57 @@ void main(List<String> args) async {
     if (estado == null || !validos.contains(estado)) {
       return _errorResponse('Estado inválido');
     }
+    final retiene = estado == 'confirmada' || estado == 'entregada';
 
-    final res = await db.conn.execute(
-      Sql.named('''
-        UPDATE reservas 
-        SET estado = @estado, actualizado_en = CURRENT_TIMESTAMP
-        WHERE folio = @id OR id::text = @id
-        RETURNING id
-      '''),
-      parameters: {'estado': estado, 'id': id},
-    );
-    if (res.isEmpty) return _errorResponse('Reserva no encontrada', status: 404);
+    final cambios = await db.conn.runTx((tx) async {
+      final fila = await tx.execute(
+        Sql.named('SELECT id, stock_descontado FROM reservas WHERE folio = @id OR id::text = @id FOR UPDATE'),
+        parameters: {'id': id},
+      );
+      if (fila.isEmpty) throw const _ErrorNegocio('Reserva no encontrada', 404);
+      final reservaId = fila.first[0] as int;
+      final descontado = fila.first[1] as bool;
+      final ajustes = <Map<String, Object?>>[];
 
-    return _jsonResponse({'id': id, 'estado': estado});
+      if (retiene != descontado) {
+        final lineas = await tx.execute(
+          Sql.named('''
+            SELECT rd.producto_id, rd.cantidad, p.nombre, p.stock_actual
+            FROM reserva_detalles rd JOIN productos p ON p.id = rd.producto_id
+            WHERE rd.reserva_id = @rid ORDER BY rd.producto_id FOR UPDATE OF p
+          '''),
+          parameters: {'rid': reservaId},
+        );
+        for (final l in lineas) {
+          final cant = l[1] as int;
+          final stock = l[3] as int;
+          if (retiene && stock < cant) {
+            throw _ErrorNegocio(
+                'Stock insuficiente de "${l[2]}": quedan $stock y la reserva pide $cant. '
+                'Ajusta el stock o rechaza la reserva.',
+                409);
+          }
+          final nuevo = retiene ? stock - cant : stock + cant;
+          await tx.execute(
+            Sql.named('UPDATE productos SET stock_actual = @s WHERE id = @pid'),
+            parameters: {'s': nuevo, 'pid': l[0]},
+          );
+          ajustes.add({'producto': l[2], 'cantidad': retiene ? -cant : cant, 'stock': nuevo});
+        }
+      }
+
+      await tx.execute(
+        Sql.named('''
+          UPDATE reservas
+          SET estado = @estado, stock_descontado = @ret, actualizado_en = CURRENT_TIMESTAMP
+          WHERE id = @rid
+        '''),
+        parameters: {'estado': estado, 'ret': retiene, 'rid': reservaId},
+      );
+      return ajustes;
+    });
+
+    return _jsonResponse({'id': id, 'estado': estado, 'ajustesStock': cambios});
   });
 
   // ==========================================================================
@@ -1890,7 +1931,11 @@ void main(List<String> args) async {
         await db.conn.execute(
           Sql.named('''
             UPDATE productos 
-            SET stock_actual = @stock, ultima_sincronizacion = CURRENT_TIMESTAMP,
+            SET stock_actual = GREATEST(0, @stock - COALESCE((
+                  SELECT SUM(rd.cantidad) FROM reserva_detalles rd
+                  JOIN reservas rs ON rs.id = rd.reserva_id
+                  WHERE rd.producto_id = productos.id AND rs.estado = 'confirmada' AND rs.stock_descontado), 0)),
+                ultima_sincronizacion = CURRENT_TIMESTAMP,
                 precio_referencia = COALESCE(@precio, precio_referencia),
                 categoria_id = COALESCE(categoria_id, @cat),
                 nombre = CASE
@@ -2242,8 +2287,9 @@ const String _paginaSwagger = '''<!DOCTYPE html>
 </body>
 </html>''';
 
-/// Error de validación de negocio que se devuelve al cliente como 400.
+/// Error de validación de negocio que se devuelve al cliente (400 por defecto).
 class _ErrorNegocio implements Exception {
   final String mensaje;
-  const _ErrorNegocio(this.mensaje);
+  final int status;
+  const _ErrorNegocio(this.mensaje, [this.status = 400]);
 }

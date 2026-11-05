@@ -591,7 +591,12 @@ paths:
   /api/admin/reservas/{id}:
     put:
       tags: [Admin - Reservas y ventas]
-      summary: Cambia el estado de una reserva
+      summary: Cambia el estado de una reserva (y ajusta el stock)
+      description: >
+        `pendiente` y `rechazada` no retienen stock. `confirmada` y `entregada` descuentan las
+        unidades de la reserva una sola vez; si la reserva vuelve a pendiente o se rechaza, se
+        reponen. Si no alcanza el stock responde 409 sin cambiar nada. El sync de 30 min resta
+        lo retenido por reservas confirmadas para no devolverlo.
       security: [{basicAuth: []}]
       parameters:
         - {name: id, in: path, required: true, description: Folio (ej. RES-0001) o id interno, schema: {type: string}}
@@ -614,6 +619,19 @@ paths:
                 properties:
                   id: {type: string}
                   estado: {type: string}
+                  ajustesStock:
+                    type: array
+                    description: Cambios de stock aplicados por esta transición
+                    items:
+                      type: object
+                      properties:
+                        producto: {type: string}
+                        cantidad: {type: integer, description: Negativo = descontado, positivo = repuesto}
+                        stock: {type: integer, description: Stock resultante}
+        '404':
+          description: Reserva no encontrada
+        '409':
+          description: Stock insuficiente para confirmar o entregar la reserva
         '400':
           $ref: '#/components/responses/Error'
         '401':

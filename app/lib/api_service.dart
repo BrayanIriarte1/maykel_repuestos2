@@ -329,7 +329,9 @@ class ApiService {
     return lista.map((e) => Reserva.fromJson(e as Map<String, dynamic>)).toList();
   }
 
-  Future<void> actualizarEstadoReserva(String id, String estado) async {
+  /// Cambia el estado de una reserva. Devuelve los ajustes de stock que hizo el
+  /// servidor (confirmar/entregar descuenta; rechazar o volver a pendiente repone).
+  Future<List<Map<String, dynamic>>> actualizarEstadoReserva(String id, String estado) async {
     final resp = await http.put(
       _uri('/api/admin/reservas/$id'),
       headers: _headers(admin: true, json: true),
@@ -339,6 +341,10 @@ class ApiService {
       throw ApiException(
           _mensajeError(resp) ?? 'No se pudo actualizar la reserva.');
     }
+    final data = jsonDecode(resp.body) as Map<String, dynamic>;
+    return (data['ajustesStock'] as List<dynamic>? ?? [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
   }
 
   // ---------- Admin: ventas ----------

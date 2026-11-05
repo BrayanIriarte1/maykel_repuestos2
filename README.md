@@ -54,6 +54,8 @@ instalación y ejecución:
 - [`app/README.md`](app/README.md)
 
 Documentación del proyecto en [`docs/`](docs/): [manual de usuario](docs/MANUAL_USUARIO.md),
+[**llevar el proyecto a otro PC**](docs/GUIA_OTRO_PC.md),
+[**guía para estudiar el código**](docs/GUIA_DEL_CODIGO.md),
 [despliegue en producción](docs/DESPLIEGUE.md) y
 [estado del proyecto y trazabilidad](docs/ESTADO_PROYECTO.md).
 
@@ -61,6 +63,14 @@ Documentación del proyecto en [`docs/`](docs/): [manual de usuario](docs/MANUAL
 
 Necesitas [Flutter](https://docs.flutter.dev/get-started/install) (incluye
 Dart) y [PostgreSQL](https://www.postgresql.org/download/).
+Con todo instalado y el `backend/.env` listo, **un solo comando** enciende la página
+(compila la web si hace falta y arranca el servidor en `http://localhost:8080`):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File iniciar.ps1
+```
+
+Paso a paso, a mano:
 
 ```bash
 # 1. Base de datos: crea la base y carga tablas + datos de ejemplo

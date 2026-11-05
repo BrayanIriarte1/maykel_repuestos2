@@ -314,10 +314,11 @@ class _AdminScreenState extends State<AdminScreen> {
   }
 
   String _fmtFecha(String iso) {
-    final fecha = DateTime.tryParse(iso);
+    final fecha = DateTime.tryParse(iso)?.toLocal();
     if (fecha == null) return iso;
+    final hora = '${fecha.hour.toString().padLeft(2, '0')}:${fecha.minute.toString().padLeft(2, '0')}';
     return '${fecha.day.toString().padLeft(2, '0')}/'
-        '${fecha.month.toString().padLeft(2, '0')}/${fecha.year}';
+        '${fecha.month.toString().padLeft(2, '0')}/${fecha.year} $hora';
   }
 
   @override
@@ -711,7 +712,7 @@ class _AdminScreenState extends State<AdminScreen> {
         14, (i) => DateTime(hoy.year, hoy.month, hoy.day).subtract(Duration(days: 13 - i)));
     final totalesPorDia = {for (final d in dias) d: 0.0};
     for (final v in _ventas) {
-      final fecha = DateTime.tryParse(v.fecha);
+      final fecha = DateTime.tryParse(v.fecha)?.toLocal();
       if (fecha == null) continue;
       final clave = DateTime(fecha.year, fecha.month, fecha.day);
       if (totalesPorDia.containsKey(clave)) {
@@ -737,8 +738,15 @@ class _AdminScreenState extends State<AdminScreen> {
       mapa[sku] = (nombre: nombre, sku: sku, cantidad: (actual?.cantidad ?? 0) + cantidad);
     }
 
-    for (final r in _reservas) {
-      agregar(r.sku, r.producto, r.cantidad);
+    // Las reservas entregadas ya figuran como venta; las rechazadas no cuentan.
+    for (final r in _reservas.where((r) => r.estado == 'pendiente' || r.estado == 'confirmada')) {
+      if (r.items.isNotEmpty) {
+        for (final i in r.items) {
+          agregar(i.sku, i.nombre, i.cantidad);
+        }
+      } else {
+        agregar(r.sku, r.producto, r.cantidad);
+      }
     }
     for (final v in _ventas) {
       agregar(v.sku, v.producto, v.cantidad);
@@ -769,6 +777,11 @@ class _AdminScreenState extends State<AdminScreen> {
     }
     if (d.reservasPendientes > 0) {
       insights.add('Tienes ${d.reservasPendientes} reserva(s) pendiente(s) de confirmar.');
+    }
+    if (d.reservasConfirmadas > 0) {
+      insights.add('${d.reservasConfirmadas} reserva(s) confirmada(s) esperan retiro: '
+          '${d.unidadesRetenidas} unidad(es) apartadas por ${formatCLP(d.montoRetenido)}. '
+          'Al marcarlas como entregadas pasan a ventas.');
     }
     if (d.stockBajoCount > 0) {
       insights.add('${d.stockBajoCount} producto(s) tienen stock bajo (3 unidades o menos).');
@@ -802,6 +815,10 @@ class _AdminScreenState extends State<AdminScreen> {
               _kpiCard(formatCLP(d.montoVentas), 'Monto vendido (CLP)', Icons.payments_outlined),
               _kpiCard('${d.totalReservas}', 'Reservas totales (${d.reservasPendientes} pend.)',
                   Icons.event_note_outlined),
+              _kpiCard('${d.reservasConfirmadas}',
+                  'Por retirar (${d.unidadesRetenidas} u. · ${formatCLP(d.montoRetenido)})',
+                  Icons.inventory_outlined),
+              _kpiCard('${d.stockBajoCount}', 'Stock bajo (≤ 3 u.)', Icons.warning_amber_rounded),
               _kpiCard('${d.agotadosCount}', 'Productos agotados', Icons.report_outlined),
             ],
           ),
@@ -853,6 +870,7 @@ class _AdminScreenState extends State<AdminScreen> {
                                 FlSpot(i.toDouble(), serieVentas[i].value.toDouble()),
                             ],
                             isCurved: true,
+                            preventCurveOverShooting: true,
                             color: AppColors.red,
                             barWidth: 3,
                             dotData: const FlDotData(show: false),
@@ -1343,8 +1361,11 @@ class _AdminScreenState extends State<AdminScreen> {
                 ? ''
                 : ' Stock ${ajustes.first['cantidad'] < 0 ? 'descontado' : 'repuesto'}: '
                     '${ajustes.map((a) => '${a['producto']} (${a['cantidad'] > 0 ? '+' : ''}${a['cantidad']} → ${a['stock']})').join(', ')}.';
+            final venta = nuevoEstado == 'entregada'
+                ? ' Se registró como venta.'
+                : (r.estado == 'entregada' ? ' La venta asociada fue anulada.' : '');
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Reserva ${r.id} ${estados[nuevoEstado]!.toLowerCase()}.$detalle')),
+              SnackBar(content: Text('Reserva ${r.id} ${estados[nuevoEstado]!.toLowerCase()}.$detalle$venta')),
             );
           }
         } catch (e) {

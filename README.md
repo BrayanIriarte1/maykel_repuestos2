@@ -108,6 +108,10 @@ build, así el sitio funciona aunque no haya internet en la presentación.
   *confirmada* o *entregada* el stock se descuenta (una sola vez); si se *rechaza* o vuelve a
   *pendiente* se repone. Si no alcanza el stock, el panel avisa y no cambia nada. Mientras una
   reserva está *confirmada*, el sync de 30 min no devuelve esas unidades al stock.
+- **Reservas y Analítica:** *confirmada* aparece como "Por retirar" (unidades y valor apartados);
+  *entregada* se registra como una venta (suma a ventas, monto, gráfico de 14 días y ventas por
+  categoría). Si la reserva deja de estar entregada, esa venta se anula.
+- **Horas:** la base guarda las fechas en UTC; el panel las muestra en la hora local del navegador.
 - **Eliminar = ocultar:** así el sync no vuelve a publicar un producto retirado.
 - **Base de datos:** `backend/database/migraciones.sql` se aplica solo al arrancar el servidor
   (índices de búsqueda, integridad). Los logs antiguos se limpian automáticamente.

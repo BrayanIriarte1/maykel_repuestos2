@@ -595,7 +595,9 @@ paths:
       description: >
         `pendiente` y `rechazada` no retienen stock. `confirmada` y `entregada` descuentan las
         unidades de la reserva una sola vez; si la reserva vuelve a pendiente o se rechaza, se
-        reponen. Si no alcanza el stock responde 409 sin cambiar nada. El sync de 30 min resta
+        reponen. Al pasar a `entregada` se registra una venta por cada línea (cuenta en Analítica);
+        si deja de estar entregada, esa venta se anula. Si no alcanza el stock responde 409 sin
+        cambiar nada. El sync de 30 min resta
         lo retenido por reservas confirmadas para no devolverlo.
       security: [{basicAuth: []}]
       parameters:

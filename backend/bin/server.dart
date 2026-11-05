@@ -1252,6 +1252,30 @@ void main(List<String> args) async {
         '''),
         parameters: {'estado': estado, 'ret': retiene, 'rid': reservaId},
       );
+
+      // Entregada = venta concretada: alimenta Analítica (ventas, monto, categorías, gráfico).
+      // Si la reserva deja de estar entregada, esa venta se anula. Es idempotente.
+      await tx.execute(
+        Sql.named('DELETE FROM ventas WHERE reserva_id = @rid'),
+        parameters: {'rid': reservaId},
+      );
+      if (estado == 'entregada') {
+        final usuario = (req.context['adminSesion'] as Map<String, dynamic>?)?['usuario']?.toString();
+        await tx.execute(
+          Sql.named('''
+            INSERT INTO ventas (producto_id, sku, producto_nombre, precio_unitario, cantidad, total,
+                                cliente, metodo_pago, nota, usuario_registro, reserva_id)
+            SELECT p.id, p.codigo_interno, p.nombre, COALESCE(p.precio_referencia, 0), rd.cantidad,
+                   COALESCE(p.precio_referencia, 0) * rd.cantidad, r.cliente_nombre, 'Reserva web',
+                   'Reserva ' || r.folio, @usuario, r.id
+            FROM reserva_detalles rd
+            JOIN productos p ON p.id = rd.producto_id
+            JOIN reservas r ON r.id = rd.reserva_id
+            WHERE rd.reserva_id = @rid
+          '''),
+          parameters: {'rid': reservaId, 'usuario': usuario},
+        );
+      }
       return ajustes;
     });
 
@@ -2050,6 +2074,17 @@ void main(List<String> args) async {
     ''');
     final cal = calidad.first;
 
+    // Lo confirmado y aún no entregado: stock apartado para clientes que vienen a retirar.
+    final retenido = await db.conn.execute('''
+      SELECT COUNT(DISTINCT r.id), COALESCE(SUM(rd.cantidad), 0),
+             COALESCE(SUM(rd.cantidad * COALESCE(p.precio_referencia, 0)), 0)
+      FROM reservas r
+      JOIN reserva_detalles rd ON rd.reserva_id = r.id
+      JOIN productos p ON p.id = rd.producto_id
+      WHERE LOWER(r.estado) = 'confirmada'
+    ''');
+    final ret = retenido.first;
+
     // Solo se envían los 50 más urgentes; el total real va en *Count.
     final stockBajoRows = await db.conn.execute('''
       SELECT p.id, p.nombre, p.stock_actual, COALESCE(c.nombre, 'General')
@@ -2095,6 +2130,9 @@ void main(List<String> args) async {
       'stockBajoCount': stockBajoCount,
       'agotadosCount': agotadosCount,
       'productosPublicados': _numDe(cal[0]).toInt(),
+      'reservasConfirmadas': _numDe(ret[0]).toInt(),
+      'unidadesRetenidas': _numDe(ret[1]).toInt(),
+      'montoRetenido': _numDe(ret[2]),
       'sinPrecioCount': _numDe(cal[1]).toInt(),
       'sinFotoCount': _numDe(cal[2]).toInt(),
       'ocultosCount': _numDe(cal[3]).toInt(),

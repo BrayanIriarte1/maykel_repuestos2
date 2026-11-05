@@ -263,6 +263,9 @@ class DashboardData {
   final int sinPrecioCount;
   final int sinFotoCount;
   final int ocultosCount;
+  final int reservasConfirmadas;
+  final int unidadesRetenidas;
+  final num montoRetenido;
   final int? haceSegundos; // desde la última sincronización exitosa
 
   DashboardData({
@@ -278,11 +281,17 @@ class DashboardData {
     this.sinPrecioCount = 0,
     this.sinFotoCount = 0,
     this.ocultosCount = 0,
+    this.reservasConfirmadas = 0,
+    this.unidadesRetenidas = 0,
+    this.montoRetenido = 0,
     this.haceSegundos,
   });
 
   factory DashboardData.fromJson(Map<String, dynamic> json) {
     return DashboardData(
+      reservasConfirmadas: (json['reservasConfirmadas'] as num?)?.toInt() ?? 0,
+      unidadesRetenidas: (json['unidadesRetenidas'] as num?)?.toInt() ?? 0,
+      montoRetenido: json['montoRetenido'] as num? ?? 0,
       productosPublicados: (json['productosPublicados'] as num?)?.toInt() ?? 0,
       sinPrecioCount: (json['sinPrecioCount'] as num?)?.toInt() ?? 0,
       sinFotoCount: (json['sinFotoCount'] as num?)?.toInt() ?? 0,

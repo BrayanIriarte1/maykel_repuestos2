@@ -48,3 +48,7 @@ ALTER TABLE productos ADD CONSTRAINT productos_nombre_no_vacio
 -- Reservas: indica si ya se descontó su stock (confirmada/entregada), para no descontar dos veces.
 ALTER TABLE reservas ADD COLUMN IF NOT EXISTS stock_descontado BOOLEAN NOT NULL DEFAULT FALSE;
 CREATE INDEX IF NOT EXISTS idx_reservas_retenidas ON reservas (id) WHERE stock_descontado;
+
+-- Ventas generadas al entregar una reserva (se anulan si la reserva deja de estar entregada).
+ALTER TABLE ventas ADD COLUMN IF NOT EXISTS reserva_id INT REFERENCES reservas(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_ventas_reserva ON ventas (reserva_id) WHERE reserva_id IS NOT NULL;

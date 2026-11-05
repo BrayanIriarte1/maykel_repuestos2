@@ -300,6 +300,10 @@ void main() {
 
     test('confirmar/entregar descuenta una vez; rechazar repone; sync respeta lo retenido',
         () async {
+      Future<Map<String, dynamic>> dash() async => jsonDecode(
+          (await http.get(u('/api/admin/dashboard'), headers: adminHeaders)).body);
+      final base = await dash();
+
       final c = await http.post(u('/api/admin/repuestos'),
           headers: adminHeaders,
           body: jsonEncode({'nombre': 'Producto flujo reserva', 'sku': _sku, 'stock': 5, 'precio': 1000}));
@@ -322,6 +326,10 @@ void main() {
 
       expect((await estado(folio, 'confirmada'))['status'], 200);
       expect(await stockDe(id), 3, reason: 'confirmar descuenta');
+      var d = await dash();
+      expect(d['reservasConfirmadas'], base['reservasConfirmadas'] + 1);
+      expect(d['unidadesRetenidas'], base['unidadesRetenidas'] + 2);
+      expect(d['totalVentas'], base['totalVentas'], reason: 'confirmar aún no es venta');
 
       expect((await estado(folio, 'confirmada'))['status'], 200);
       expect(await stockDe(id), 3, reason: 'repetir el estado no descuenta de nuevo');
@@ -340,9 +348,18 @@ void main() {
 
       expect((await estado(folio, 'entregada'))['status'], 200);
       expect(await stockDe(id), 3, reason: 'entregar tras confirmar no descuenta otra vez');
+      d = await dash();
+      expect(d['totalVentas'], base['totalVentas'] + 1, reason: 'entregar registra una venta');
+      expect(d['montoVentas'], base['montoVentas'] + 2000);
+      expect(d['reservasConfirmadas'], base['reservasConfirmadas']);
+      expect((await estado(folio, 'entregada'))['status'], 200);
+      expect((await dash())['totalVentas'], base['totalVentas'] + 1, reason: 'sin ventas duplicadas');
 
       expect((await estado(folio, 'rechazada'))['status'], 200);
       expect(await stockDe(id), 5, reason: 'rechazar repone');
+      d = await dash();
+      expect(d['totalVentas'], base['totalVentas'], reason: 'rechazar anula la venta');
+      expect(d['montoVentas'], base['montoVentas']);
 
       // Stock insuficiente al confirmar → 409 y sin cambios.
       await http.put(u('/api/admin/repuestos/$id'), headers: adminHeaders, body: jsonEncode({'stock': 1}));

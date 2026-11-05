@@ -221,7 +221,7 @@ class _ReservaDialogState extends State<_ReservaDialog> {
   }
 
   Widget _buildTicket(Reserva r) {
-    final fecha = DateTime.tryParse(r.fecha) ?? DateTime.now();
+    final fecha = DateTime.tryParse(r.fecha)?.toLocal() ?? DateTime.now();
     final fechaStr =
         '${fecha.day.toString().padLeft(2, '0')}/${fecha.month.toString().padLeft(2, '0')}/${fecha.year}';
 

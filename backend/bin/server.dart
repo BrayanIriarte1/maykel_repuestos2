@@ -48,7 +48,8 @@ Response _errorResponse(String mensaje, {int status = 400}) =>
     _jsonResponse({'error': mensaje}, status: status);
 
 Future<Map<String, dynamic>?> _leerJsonBody(Request request) async {
-  final texto = await request.readAsString();
+  // allowMalformed: un cliente que envía una codificación distinta a UTF-8 no debe provocar un 500.
+  final texto = utf8.decode(await request.read().expand((c) => c).toList(), allowMalformed: true);
   if (texto.isEmpty) return {};
   try {
     return jsonDecode(texto) as Map<String, dynamic>;

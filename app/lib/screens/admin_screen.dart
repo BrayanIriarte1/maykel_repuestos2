@@ -9,6 +9,7 @@ import '../models.dart';
 import '../utils/format.dart';
 import '../utils/pdf_report.dart';
 import '../widgets/admin_inventario.dart';
+import '../widgets/admin_reservas.dart';
 import '../widgets/efectos.dart';
 
 /// Panel de administración con navegación lateral (sidebar), igual que el
@@ -109,7 +110,7 @@ class _AdminScreenState extends State<AdminScreen> {
     _cargarTodo();
     // El resumen, las reservas y las ventas se actualizan solos cada minuto
     // (llegan reservas nuevas y la sincronización cambia el stock).
-    _auto = Timer.periodic(const Duration(seconds: 60), (_) => _cargarResumen());
+    _auto = Timer.periodic(const Duration(seconds: 30), (_) => _cargarResumen());
   }
 
   @override
@@ -161,18 +162,35 @@ class _AdminScreenState extends State<AdminScreen> {
     ]);
   }
 
+  /// Reservas pendientes (por atender): alimenta insignias, campana y avisos.
+  int get _pendientes => _reservas.where((r) => r.estado == 'pendiente').length;
+  int _pendientesPrevios = -1;
+
   /// Refresco silencioso (sin spinner) de reservas, ventas y KPIs.
   Future<void> _cargarResumen() async {
     if (!mounted || _cargando) return;
     try {
       final r = await _pedirDatos();
       if (!mounted) return;
+      final nuevas = r[0] as List<Reserva>;
+      final antes = _pendientesPrevios;
       setState(() {
-        _reservas = r[0] as List<Reserva>;
+        _reservas = nuevas;
         _ventas = r[1] as List<Venta>;
         _dashboard = r[2] as DashboardData?;
         _ultimaActualizacion = DateTime.now();
       });
+      final ahora = _pendientes;
+      _pendientesPrevios = ahora;
+      if (antes >= 0 && ahora > antes && _sesion.puede('reservas')) {
+        final ultima = _reservas.firstWhere((x) => x.estado == 'pendiente');
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('🔔 Nueva reserva ${ultima.id} de ${ultima.nombre}'),
+          duration: const Duration(seconds: 8),
+          action: SnackBarAction(
+              label: 'VER', onPressed: () => setState(() => _seccionActiva = 'reservas')),
+        ));
+      }
     } catch (_) {
       // Un fallo puntual de red no debe molestar: se reintenta en el siguiente ciclo.
     }
@@ -208,6 +226,7 @@ class _AdminScreenState extends State<AdminScreen> {
         _sincronizarControladoresContenido();
         _cargando = false;
         _ultimaActualizacion = DateTime.now();
+        _pendientesPrevios = _pendientes;
         // Si la sección activa no está permitida para este usuario, cae a Inicio.
         final seccion = _secciones.firstWhere((s) => s.clave == _seccionActiva);
         if (seccion.permiso != null && !_sesion.puede(seccion.permiso!)) {
@@ -463,6 +482,21 @@ class _AdminScreenState extends State<AdminScreen> {
                         color: activo ? Colors.white : Colors.white60,
                         fontSize: 13.5,
                         fontWeight: activo ? FontWeight.w700 : FontWeight.w400)),
+                if (s.clave == 'reservas' && _pendientes > 0) ...[
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: activo ? Colors.white : AppColors.red,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text('$_pendientes',
+                        style: TextStyle(
+                            color: activo ? AppColors.red : Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w900)),
+                  ),
+                ],
               ],
             ),
           ),
@@ -519,8 +553,8 @@ class _AdminScreenState extends State<AdminScreen> {
             tooltip: 'Actualizar datos',
           ),
           const SizedBox(width: 4),
-          Icon(Icons.notifications_none, color: AppColors.steel),
-          const SizedBox(width: 16),
+          _campana(),
+          const SizedBox(width: 12),
           CircleAvatar(
             radius: 15,
             backgroundColor: AppColors.paper2,
@@ -531,6 +565,73 @@ class _AdminScreenState extends State<AdminScreen> {
           ),
         ],
       ),
+      ),
+    );
+  }
+
+  /// Campana: reservas pendientes y alertas de inventario, con acceso directo.
+  Widget _campana() {
+    final pend = _reservas.where((r) => r.estado == 'pendiente').take(5).toList();
+    final d = _dashboard;
+    final alertas = <(IconData, String, String)>[
+      if (d != null && d.sinPrecioCount > 0)
+        (Icons.money_off, '${d.sinPrecioCount} productos publicados sin precio', 'stock'),
+      if (d != null && (d.haceSegundos == null || d.haceSegundos! > 7200))
+        (Icons.sync_problem, 'El inventario no se sincroniza hace más de 2 h', 'stock'),
+    ];
+    final total = _pendientes + alertas.length;
+    return PopupMenuButton<String>(
+      tooltip: 'Notificaciones',
+      offset: const Offset(0, 44),
+      onSelected: (s) => setState(() => _seccionActiva = s),
+      itemBuilder: (_) => [
+        if (_sesion.puede('reservas'))
+          for (final r in pend)
+            PopupMenuItem(
+              value: 'reservas',
+              child: ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.hourglass_top_rounded, color: AppColors.warn),
+                title: Text('${r.id} · ${r.nombre}', overflow: TextOverflow.ellipsis),
+                subtitle: Text('${r.producto} · ${tiempoRelativo(r.fecha)}',
+                    overflow: TextOverflow.ellipsis),
+              ),
+            ),
+        for (final a in alertas)
+          PopupMenuItem(
+            value: a.$3,
+            child: ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(a.$1, color: AppColors.warn),
+              title: Text(a.$2),
+            ),
+          ),
+        if (total == 0)
+          const PopupMenuItem(enabled: false, child: Text('Sin novedades 🎉')),
+      ],
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          const Padding(
+            padding: EdgeInsets.all(6),
+            child: Icon(Icons.notifications_none, color: AppColors.steel),
+          ),
+          if (total > 0)
+            Positioned(
+              right: 0,
+              top: 0,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                decoration:
+                    BoxDecoration(color: AppColors.red, borderRadius: BorderRadius.circular(10)),
+                child: Text('$total',
+                    style: const TextStyle(
+                        color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900)),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -590,8 +691,11 @@ class _AdminScreenState extends State<AdminScreen> {
                           style: const TextStyle(
                               fontSize: 24, fontWeight: FontWeight.w900, color: Colors.white)),
                       const SizedBox(height: 6),
-                      const Text('Este es el resumen general de Maykel Repuestos.',
-                          style: TextStyle(color: Colors.white70, fontSize: 14)),
+                      Text(
+                        '${_saludoDia()} · ${_sesion.esSuperAdmin ? 'Propietario' : (_sesion.rolNombre ?? 'Equipo')}'
+                        '${_pendientes > 0 && _sesion.puede('reservas') ? ' · Tienes $_pendientes reserva${_pendientes == 1 ? '' : 's'} por atender' : ''}',
+                        style: const TextStyle(color: Colors.white70, fontSize: 14),
+                      ),
                     ],
                   ),
                 ),
@@ -605,12 +709,40 @@ class _AdminScreenState extends State<AdminScreen> {
               spacing: 14,
               runSpacing: 14,
               children: [
+                if (_sesion.puede('reservas'))
+                  _kpiCard('$_pendientes', 'Reservas por atender', Icons.hourglass_top_rounded),
+                if (_sesion.puede('reservas'))
+                  _kpiCard('${d.reservasConfirmadas}',
+                      'Por retirar (${d.unidadesRetenidas} u.)', Icons.inventory_outlined),
                 _kpiCard('${d.productosPublicados}', 'Productos publicados', Icons.inventory_2_outlined),
-                _kpiCard('${d.totalVentas}', 'Ventas registradas', Icons.point_of_sale_outlined),
-                _kpiCard('${d.totalReservas}', 'Reservas totales', Icons.event_note_outlined),
                 _kpiCard('${d.agotadosCount}', 'Productos agotados', Icons.report_outlined),
+                if (_sesion.puede('stock'))
+                  _kpiCard('${d.totalVentas}', 'Ventas registradas', Icons.point_of_sale_outlined),
+                if (_sesion.puede('stock'))
+                  _kpiCard(formatCLP(d.montoVentas), 'Monto vendido', Icons.payments_outlined),
               ],
             ),
+          const SizedBox(height: 24),
+          LayoutBuilder(builder: (context, c) {
+            final dos = c.maxWidth > 900;
+            final porAtender = _panelPorAtender();
+            final porReponer = _panelPorReponer();
+            if (!dos) {
+              return Column(children: [
+                if (porAtender != null) porAtender,
+                if (porAtender != null) const SizedBox(height: 16),
+                if (porReponer != null) porReponer,
+              ]);
+            }
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (porAtender != null) Expanded(flex: 6, child: porAtender),
+                if (porAtender != null && porReponer != null) const SizedBox(width: 16),
+                if (porReponer != null) Expanded(flex: 5, child: porReponer),
+              ],
+            );
+          }),
           const SizedBox(height: 28),
           Text('Accesos rápidos',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
@@ -625,6 +757,146 @@ class _AdminScreenState extends State<AdminScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  String _saludoDia() {
+    final h = DateTime.now().hour;
+    final saludo = h < 12 ? 'Buenos días' : (h < 20 ? 'Buenas tardes' : 'Buenas noches');
+    const dias = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
+    final n = DateTime.now();
+    return '$saludo, hoy es ${dias[n.weekday - 1]} ${n.day}/${n.month}';
+  }
+
+  Widget _tarjetaPanel({
+    required String titulo,
+    required IconData icono,
+    required Widget child,
+    String? accion,
+    VoidCallback? onAccion,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.paper2),
+        boxShadow: const [BoxShadow(color: Color(0x0F000000), blurRadius: 12, offset: Offset(0, 5))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Icon(icono, size: 20, color: AppColors.red),
+            const SizedBox(width: 8),
+            Expanded(
+                child: Text(titulo,
+                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15))),
+            if (accion != null) TextButton(onPressed: onAccion, child: Text(accion)),
+          ]),
+          const SizedBox(height: 8),
+          child,
+        ],
+      ),
+    );
+  }
+
+  /// Reservas pendientes con botones para confirmar o rechazar sin salir del Inicio.
+  Widget? _panelPorAtender() {
+    if (!_sesion.puede('reservas')) return null;
+    final pend = _reservas.where((r) => r.estado == 'pendiente').take(5).toList();
+    return _tarjetaPanel(
+      titulo: 'Reservas por atender',
+      icono: Icons.hourglass_top_rounded,
+      accion: 'Ver todas',
+      onAccion: () => setState(() => _seccionActiva = 'reservas'),
+      child: pend.isEmpty
+          ? const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(
+                  child: Text('¡Todo al día! No hay reservas pendientes. 🎉',
+                      style: TextStyle(color: AppColors.steel))),
+            )
+          : Column(children: [
+              for (final r in pend)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Row(children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('${r.id} · ${r.nombre}',
+                              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
+                          Text(
+                              '${r.producto}${r.items.length > 1 ? '' : ' ×${r.cantidad}'} · ${tiempoRelativo(r.fecha)}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(color: AppColors.steel, fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Rechazar',
+                      onPressed: () => _cambiarEstadoReserva(r, 'rechazada'),
+                      icon: const Icon(Icons.close, color: AppColors.bad, size: 20),
+                    ),
+                    FilledButton(
+                      onPressed: () => _cambiarEstadoReserva(r, 'confirmada'),
+                      style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.red, visualDensity: VisualDensity.compact),
+                      child: const Text('Confirmar'),
+                    ),
+                  ]),
+                ),
+            ]),
+    );
+  }
+
+  /// Productos con stock bajo (los más urgentes) con acceso directo a Stock.
+  Widget? _panelPorReponer() {
+    final d = _dashboard;
+    if (d == null || !_sesion.puede('dashboard')) return null;
+    final lista = d.stockBajo.take(6).toList();
+    return _tarjetaPanel(
+      titulo: 'Por reponer (stock ≤ 3)',
+      icono: Icons.warning_amber_rounded,
+      accion: _sesion.puede('catalogo') || _sesion.puede('stock') ? 'Ir a Stock' : null,
+      onAccion: () => setState(() => _seccionActiva = _sesion.puede('stock') ? 'stock' : 'catalogo'),
+      child: lista.isEmpty
+          ? const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(
+                  child: Text('Sin productos con stock bajo.', style: TextStyle(color: AppColors.steel))),
+            )
+          : Column(children: [
+              for (final p in lista)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 5),
+                  child: Row(children: [
+                    Expanded(
+                      child: Text(p.nombre,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 13)),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 2),
+                      decoration: BoxDecoration(
+                          color: AppColors.warn.withOpacity(0.14),
+                          borderRadius: BorderRadius.circular(20)),
+                      child: Text('${p.stock} u.',
+                          style: const TextStyle(
+                              color: AppColors.warn, fontWeight: FontWeight.w800, fontSize: 12)),
+                    ),
+                  ]),
+                ),
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text('${d.stockBajoCount} productos con stock bajo en total · ${d.agotadosCount} agotados',
+                    style: const TextStyle(color: AppColors.steel, fontSize: 11.5)),
+              ),
+            ]),
     );
   }
 
@@ -1271,113 +1543,42 @@ class _AdminScreenState extends State<AdminScreen> {
   // ---------------------------------------------------------------
 
   Widget _buildReservasTab() {
-    return RefreshIndicator(
-      onRefresh: _cargarTodo,
-      child: ListView(
-        padding: const EdgeInsets.all(24),
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text('${_reservas.length} reserva(s) registradas',
-                    style: TextStyle(color: AppColors.steel, fontSize: 13)),
-              ),
-              OutlinedButton.icon(
-                onPressed: _descargarPdfReservas,
-                icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
-                label: const Text('Descargar PDF'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppColors.paper2),
-            ),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: DataTable(
-                columns: const [
-                  DataColumn(label: Text('Fecha')),
-                  DataColumn(label: Text('Cliente')),
-                  DataColumn(label: Text('Contacto')),
-                  DataColumn(label: Text('Producto')),
-                  DataColumn(label: Text('Cant.')),
-                  DataColumn(label: Text('Estado')),
-                ],
-                rows: _reservas.isEmpty
-                    ? [
-                        const DataRow(cells: [
-                          DataCell(Text('Aún no hay reservas.')),
-                          DataCell(Text('')),
-                          DataCell(Text('')),
-                          DataCell(Text('')),
-                          DataCell(Text('')),
-                          DataCell(Text('')),
-                        ])
-                      ]
-                    : _reservas
-                        .map((r) => DataRow(cells: [
-                              DataCell(Text(_fmtFecha(r.fecha))),
-                              DataCell(Text(r.nombre)),
-                              DataCell(Text('${r.telefono}\n${r.email}')),
-                              DataCell(Text('${r.producto}\n${r.sku}')),
-                              DataCell(Text('${r.cantidad}')),
-                              DataCell(_estadoDropdown(r)),
-                            ]))
-                        .toList(),
-              ),
-            ),
-          ),
-        ],
-      ),
+    return ReservasPanel(
+      reservas: _reservas,
+      puedeEditar: _sesion.puede('reservas'),
+      onCambiarEstado: _cambiarEstadoReserva,
+      onPdf: _descargarPdfReservas,
+      onRefrescar: _cargarResumen,
     );
   }
 
-  Widget _estadoDropdown(Reserva r) {
-    const estados = {
-      'pendiente': 'Pendiente',
-      'confirmada': 'Confirmada',
-      'entregada': 'Entregada',
-      'rechazada': 'Rechazada',
-    };
-    return DropdownButton<String>(
-      value: estados.containsKey(r.estado) ? r.estado : 'pendiente',
-      underline: const SizedBox.shrink(),
-      items: [
-        for (final e in estados.entries) DropdownMenuItem(value: e.key, child: Text(e.value)),
-      ],
-      onChanged: (nuevoEstado) async {
-        if (nuevoEstado == null || nuevoEstado == r.estado) return;
-        try {
-          final ajustes = await ApiService.instance.actualizarEstadoReserva(r.id, nuevoEstado);
-          // Las reservas, el resumen y la lista de stock se vuelven a pedir: el stock pudo cambiar.
-          setState(() => _inventarioVersion++);
-          await _cargarResumen();
-          if (mounted) {
-            final detalle = ajustes.isEmpty
-                ? ''
-                : ' Stock ${ajustes.first['cantidad'] < 0 ? 'descontado' : 'repuesto'}: '
-                    '${ajustes.map((a) => '${a['producto']} (${a['cantidad'] > 0 ? '+' : ''}${a['cantidad']} → ${a['stock']})').join(', ')}.';
-            final venta = nuevoEstado == 'entregada'
-                ? ' Se registró como venta.'
-                : (r.estado == 'entregada' ? ' La venta asociada fue anulada.' : '');
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Reserva ${r.id} ${estados[nuevoEstado]!.toLowerCase()}.$detalle$venta')),
-            );
-          }
-        } catch (e) {
-          await _cargarResumen();
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('No se pudo actualizar: $e'), backgroundColor: AppColors.bad),
-            );
-          }
-        }
-      },
-    );
+  /// Cambia el estado de una reserva y refresca todo: confirmar/entregar descuenta stock,
+  /// entregar registra una venta y rechazar repone y anula la venta.
+  Future<void> _cambiarEstadoReserva(Reserva r, String nuevoEstado) async {
+    final etiqueta = kEstadosReserva[nuevoEstado]?.etiqueta.toLowerCase() ?? nuevoEstado;
+    try {
+      final ajustes = await ApiService.instance.actualizarEstadoReserva(r.id, nuevoEstado);
+      setState(() => _inventarioVersion++);
+      await _cargarResumen();
+      if (!mounted) return;
+      final detalle = ajustes.isEmpty
+          ? ''
+          : ' Stock ${ajustes.first['cantidad'] < 0 ? 'descontado' : 'repuesto'}: '
+              '${ajustes.map((a) => '${a['producto']} (${a['cantidad'] > 0 ? '+' : ''}${a['cantidad']} → ${a['stock']})').join(', ')}.';
+      final venta = nuevoEstado == 'entregada'
+          ? ' Se registró como venta.'
+          : (r.estado == 'entregada' ? ' La venta asociada fue anulada.' : '');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Reserva ${r.id}: $etiqueta.$detalle$venta')),
+      );
+    } catch (e) {
+      await _cargarResumen();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo actualizar: $e'), backgroundColor: AppColors.bad),
+        );
+      }
+    }
   }
 
   Future<void> _descargarPdfReservas() async {

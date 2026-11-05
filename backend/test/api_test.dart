@@ -128,6 +128,13 @@ void main() {
           headers: {'Content-Type': 'application/json'}, body: '{no-json');
       expect(r.statusCode, 400);
     });
+
+    test('texto en otra codificación (Latin-1) no provoca 500', () async {
+      final r = await http.post(u('/api/reservas'),
+          headers: {'Content-Type': 'application/json'},
+          body: [...'{"cliente_nombre":"P'.codeUnits, 0xE9, ...'rez"}'.codeUnits]);
+      expect(r.statusCode, lessThan(500));
+    });
   });
 
   group('Seguridad (RNF03)', () {

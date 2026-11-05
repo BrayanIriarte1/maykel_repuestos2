@@ -3,3 +3,5 @@
 build/
 .flutter-plugins
 .flutter-plugins-dependencies
+# Widget Preview related
+.widget_preview/

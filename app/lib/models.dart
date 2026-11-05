@@ -459,6 +459,8 @@ class ContenidoSitio {
   String serviciosTitulo;
   String catalogoKicker;
   String catalogoTitulo;
+  String marcasTitulo;
+  String marcasSubtitulo;
   String catalogoBusquedaHint;
   String contactoKicker;
   String contactoTitulo;
@@ -491,6 +493,9 @@ class ContenidoSitio {
     required this.serviciosTitulo,
     required this.catalogoKicker,
     required this.catalogoTitulo,
+    this.marcasTitulo = '¿Buscas un repuesto para marcas chinas?',
+    this.marcasSubtitulo =
+        'En Maykel Repuestos trabajamos con estas marcas. Toca una para ver sus repuestos.',
     required this.catalogoBusquedaHint,
     required this.contactoKicker,
     required this.contactoTitulo,
@@ -527,6 +532,8 @@ class ContenidoSitio {
       serviciosTitulo: serviciosTitulo,
       catalogoKicker: catalogoKicker,
       catalogoTitulo: catalogoTitulo,
+      marcasTitulo: marcasTitulo,
+      marcasSubtitulo: marcasSubtitulo,
       catalogoBusquedaHint: catalogoBusquedaHint,
       contactoKicker: contactoKicker,
       contactoTitulo: contactoTitulo,
@@ -574,6 +581,12 @@ class ContenidoSitio {
       serviciosTitulo: textos['serviciosTitulo'] as String? ?? '',
       catalogoKicker: textos['catalogoKicker'] as String? ?? '',
       catalogoTitulo: textos['catalogoTitulo'] as String? ?? '',
+      marcasTitulo: (textos['marcasTitulo'] as String?)?.trim().isNotEmpty == true
+          ? textos['marcasTitulo'] as String
+          : '¿Buscas un repuesto para marcas chinas?',
+      marcasSubtitulo: (textos['marcasSubtitulo'] as String?)?.trim().isNotEmpty == true
+          ? textos['marcasSubtitulo'] as String
+          : 'En Maykel Repuestos trabajamos con estas marcas. Toca una para ver sus repuestos.',
       catalogoBusquedaHint: textos['catalogoBusquedaHint'] as String? ?? '',
       contactoKicker: textos['contactoKicker'] as String? ?? '',
       contactoTitulo: textos['contactoTitulo'] as String? ?? '',
@@ -615,6 +628,8 @@ class ContenidoSitio {
           'serviciosTitulo': serviciosTitulo,
           'catalogoKicker': catalogoKicker,
           'catalogoTitulo': catalogoTitulo,
+          'marcasTitulo': marcasTitulo,
+          'marcasSubtitulo': marcasSubtitulo,
           'catalogoBusquedaHint': catalogoBusquedaHint,
           'contactoKicker': contactoKicker,
           'contactoTitulo': contactoTitulo,

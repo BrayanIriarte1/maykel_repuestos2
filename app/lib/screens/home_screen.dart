@@ -326,16 +326,16 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Centrado(
         child: Column(
           children: [
-            const Revelar(
+            Revelar(
               child: Column(children: [
-                Text('¿Buscas un repuesto para marcas chinas e indias?',
+                Text(SiteContent.actual.marcasTitulo,
                     textAlign: TextAlign.center,
-                    style: TextStyle(
+                    style: const TextStyle(
                         fontSize: 28, fontWeight: FontWeight.w900, color: AppColors.char, height: 1.2)),
-                SizedBox(height: 8),
-                Text('En Maykel Repuestos trabajamos con estas marcas. Toca una para ver sus repuestos.',
+                const SizedBox(height: 8),
+                Text(SiteContent.actual.marcasSubtitulo,
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 15, color: AppColors.steel)),
+                    style: const TextStyle(fontSize: 15, color: AppColors.steel)),
               ]),
             ),
             const SizedBox(height: 28),
@@ -1522,7 +1522,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          Text('Â© ${DateTime.now().year} ${SiteContent.actual.footerDerechos}',
+          Text('© ${DateTime.now().year} ${SiteContent.actual.footerDerechos}',
               style: const TextStyle(color: Colors.white38, fontSize: 11)),
         ],
       ),

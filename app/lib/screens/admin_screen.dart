@@ -84,6 +84,8 @@ class _AdminScreenState extends State<AdminScreen> {
   final _serviciosTituloCtrl = TextEditingController();
   final _catalogoKickerCtrl = TextEditingController();
   final _catalogoTituloCtrl = TextEditingController();
+  final _marcasTituloCtrl = TextEditingController();
+  final _marcasSubtituloCtrl = TextEditingController();
   final _catalogoBusquedaHintCtrl = TextEditingController();
   final _contactoKickerCtrl = TextEditingController();
   final _contactoTituloCtrl = TextEditingController();
@@ -136,6 +138,8 @@ class _AdminScreenState extends State<AdminScreen> {
     _serviciosTituloCtrl.dispose();
     _catalogoKickerCtrl.dispose();
     _catalogoTituloCtrl.dispose();
+    _marcasTituloCtrl.dispose();
+    _marcasSubtituloCtrl.dispose();
     _catalogoBusquedaHintCtrl.dispose();
     _contactoKickerCtrl.dispose();
     _contactoTituloCtrl.dispose();
@@ -257,6 +261,8 @@ class _AdminScreenState extends State<AdminScreen> {
     _serviciosTituloCtrl.text = _contenidoEdit.serviciosTitulo;
     _catalogoKickerCtrl.text = _contenidoEdit.catalogoKicker;
     _catalogoTituloCtrl.text = _contenidoEdit.catalogoTitulo;
+    _marcasTituloCtrl.text = _contenidoEdit.marcasTitulo;
+    _marcasSubtituloCtrl.text = _contenidoEdit.marcasSubtitulo;
     _catalogoBusquedaHintCtrl.text = _contenidoEdit.catalogoBusquedaHint;
     _contactoKickerCtrl.text = _contenidoEdit.contactoKicker;
     _contactoTituloCtrl.text = _contenidoEdit.contactoTitulo;
@@ -291,6 +297,8 @@ class _AdminScreenState extends State<AdminScreen> {
     _contenidoEdit.serviciosTitulo = _serviciosTituloCtrl.text.trim();
     _contenidoEdit.catalogoKicker = _catalogoKickerCtrl.text.trim();
     _contenidoEdit.catalogoTitulo = _catalogoTituloCtrl.text.trim();
+    _contenidoEdit.marcasTitulo = _marcasTituloCtrl.text.trim();
+    _contenidoEdit.marcasSubtitulo = _marcasSubtituloCtrl.text.trim();
     _contenidoEdit.catalogoBusquedaHint = _catalogoBusquedaHintCtrl.text.trim();
     _contenidoEdit.contactoKicker = _contactoKickerCtrl.text.trim();
     _contenidoEdit.contactoTitulo = _contactoTituloCtrl.text.trim();
@@ -2324,6 +2332,16 @@ class _AdminScreenState extends State<AdminScreen> {
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _marcasTituloCtrl,
+                decoration: const InputDecoration(labelText: 'Título de la sección de marcas'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _marcasSubtituloCtrl,
+                decoration: const InputDecoration(labelText: 'Subtítulo de la sección de marcas'),
               ),
               const SizedBox(height: 12),
               TextField(

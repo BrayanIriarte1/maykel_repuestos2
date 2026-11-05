@@ -191,6 +191,9 @@ Map<String, dynamic> contenidoPorDefecto() {
       'serviciosTitulo': 'Servicios',
       'catalogoKicker': 'CATÁLOGO TÉCNICO',
       'catalogoTitulo': 'Busca tu repuesto compatible',
+      'marcasTitulo': '¿Buscas un repuesto para marcas chinas?',
+      'marcasSubtitulo':
+          'En Maykel Repuestos trabajamos con estas marcas. Toca una para ver sus repuestos.',
       'catalogoBusquedaHint': 'Buscar por nombre, código OEM o SKU...',
       'contactoKicker': 'CONTACTO',
       'contactoTitulo': 'Sucursal Maykel Repuestos 2',

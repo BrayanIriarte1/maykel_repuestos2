@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../config.dart';
 import '../models.dart';
+import 'diseno.dart';
 import 'efectos.dart';
 
 /// Tarjeta de producto del catálogo público: encabezado con degradado e ícono
@@ -20,6 +21,8 @@ class ProductCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final stock = producto.stock;
     final agotado = stock <= 0;
+    final foto = fotoDe(producto);
+    final referencial = esFotoReferencial(producto);
 
     return HoverLift(
       builder: (context, hover) => AnimatedContainer(
@@ -42,7 +45,7 @@ class ProductCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Container(
-              height: producto.imagenAbsoluta != null ? 150 : 104,
+              height: 148,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
@@ -55,19 +58,33 @@ class ProductCard extends StatelessWidget {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  if (producto.imagenAbsoluta != null) ...[
-                    Image.network(
-                      producto.imagenAbsoluta!,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                  if (foto != null) ...[
+                    AnimatedScale(
+                      scale: hover ? 1.1 : 1,
+                      duration: const Duration(milliseconds: 450),
+                      curve: Curves.easeOut,
+                      child: ColorFiltered(
+                        colorFilter: agotado
+                            ? const ColorFilter.mode(Colors.grey, BlendMode.saturation)
+                            : const ColorFilter.mode(Colors.transparent, BlendMode.dst),
+                        child: Image(
+                          image: foto,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                        ),
+                      ),
                     ),
                     DecoratedBox(
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
-                          colors: [Colors.black.withOpacity(0.55), Colors.transparent],
-                          stops: const [0, 0.5],
+                          colors: [
+                            Colors.black.withOpacity(0.55),
+                            Colors.transparent,
+                            AppColors.char.withOpacity(0.35),
+                          ],
+                          stops: const [0, 0.45, 1],
                         ),
                       ),
                     ),
@@ -86,7 +103,7 @@ class ProductCard extends StatelessWidget {
                           ),
                         ),
                         Positioned(right: 0, top: 0, child: _StockBadge(stock: stock)),
-                        if (producto.imagenAbsoluta == null)
+                        if (foto == null)
                           Align(
                             alignment: Alignment.bottomCenter,
                             child: AnimatedScale(
@@ -94,6 +111,20 @@ class ProductCard extends StatelessWidget {
                               scale: hover ? 1.15 : 1,
                               child: Icon(iconoCategoria(producto.categoria),
                                   color: Colors.white.withOpacity(0.35), size: 44),
+                            ),
+                          )
+                        else if (referencial)
+                          Positioned(
+                            left: 0,
+                            bottom: 0,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.black54,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Text('Imagen referencial',
+                                  style: TextStyle(color: Colors.white70, fontSize: 9.5)),
                             ),
                           ),
                       ],
@@ -135,11 +166,9 @@ class ProductCard extends StatelessWidget {
                   SizedBox(
                     height: 16,
                     child: Text(
-                      producto.marca.isEmpty
-                          ? ''
-                          : (producto.modelo.isNotEmpty
-                              ? '${producto.marca} · ${producto.modelo}'
-                              : producto.marca),
+                      [producto.marca, producto.modelo]
+                          .where((e) => e.isNotEmpty && e != 'General' && e != 'Compatible')
+                          .join(' · '),
                       style: const TextStyle(fontSize: 12, color: AppColors.steel),
                       overflow: TextOverflow.ellipsis,
                     ),

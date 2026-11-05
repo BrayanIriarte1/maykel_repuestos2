@@ -963,9 +963,15 @@ void main(List<String> args) async {
             '''),
             parameters: {'m': marca},
           );
+    final categorias = await db.conn.execute('''
+      SELECT c.nombre, COUNT(*) FROM productos p JOIN categorias c ON c.id = p.categoria_id
+      WHERE p.estado_catalogo = 'PUBLICADO' AND p.stock_actual > 0 AND length(c.nombre) <= 30
+      GROUP BY c.nombre ORDER BY 2 DESC, 1 ASC LIMIT 40
+    ''');
     return _jsonResponse({
       'marcas': marcas.map((r) => {'nombre': r[0], 'total': r[1]}).toList(),
       'modelos': modelos.map((r) => {'nombre': r[0], 'total': r[1]}).toList(),
+      'categorias': categorias.map((r) => {'nombre': r[0], 'total': r[1]}).toList(),
     });
   });
 

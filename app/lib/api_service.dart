@@ -157,19 +157,19 @@ class ApiService {
     return (items: items, total: (data['total'] as num).toInt());
   }
 
-  /// Filtro jerárquico Marca -> Modelo con cantidad de productos.
-  Future<({List<(String, int)> marcas, List<(String, int)> modelos})> getFiltrosCatalogo(
-      {String? marca}) async {
+  /// Filtro jerárquico Marca -> Modelo y categorías más relevantes, con cantidad de productos.
+  Future<({List<(String, int)> marcas, List<(String, int)> modelos, List<(String, int)> categorias})>
+      getFiltrosCatalogo({String? marca}) async {
     final resp = await http.get(_uri(
         '/api/catalogo/filtros', marca == null || marca.isEmpty ? null : {'marca': marca}));
     if (resp.statusCode != 200) {
       throw ApiException('No se pudieron cargar los filtros.');
     }
     final data = jsonDecode(resp.body) as Map<String, dynamic>;
-    List<(String, int)> leer(String k) => (data[k] as List)
+    List<(String, int)> leer(String k) => (data[k] as List? ?? [])
         .map((e) => ((e as Map)['nombre'].toString(), (e['total'] as num).toInt()))
         .toList();
-    return (marcas: leer('marcas'), modelos: leer('modelos'));
+    return (marcas: leer('marcas'), modelos: leer('modelos'), categorias: leer('categorias'));
   }
 
   /// Listado interno del panel admin (paginado en el servidor): incluye precio de

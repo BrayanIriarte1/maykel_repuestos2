@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../config.dart';
 import '../models.dart';
+import 'diseno.dart';
 import 'efectos.dart';
 import 'product_card.dart';
 
@@ -266,7 +267,9 @@ class _Diapositiva extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final foto = fotoDe(producto);
     return Container(
+      clipBehavior: Clip.hardEdge,
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
@@ -277,22 +280,34 @@ class _Diapositiva extends StatelessWidget {
       padding: const EdgeInsets.all(26),
       child: Stack(
         children: [
-          if (producto.imagenAbsoluta != null)
+          if (foto != null)
             Positioned(
-              right: 0,
-              top: 0,
-              bottom: 0,
-              width: 190,
-              child: Image.network(producto.imagenAbsoluta!,
-                  fit: BoxFit.contain, errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+              right: -26,
+              top: -26,
+              bottom: -26,
+              width: 260,
+              child: ShaderMask(
+                shaderCallback: (r) => const LinearGradient(
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                  colors: [Colors.transparent, Colors.black],
+                  stops: [0, 0.55],
+                ).createShader(r),
+                blendMode: BlendMode.dstIn,
+                child: Image(
+                  image: foto,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                ),
+              ),
             )
           else
             Positioned(
-            right: -20,
-            bottom: -30,
-            child: Icon(iconoCategoria(producto.categoria),
-                size: 190, color: Colors.white.withOpacity(0.06)),
-          ),
+              right: -20,
+              bottom: -30,
+              child: Icon(iconoCategoria(producto.categoria),
+                  size: 190, color: Colors.white.withOpacity(0.06)),
+            ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.end,

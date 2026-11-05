@@ -88,6 +88,11 @@ build, así el sitio funciona aunque no haya internet en la presentación.
 
 ### Fotos de productos
 
+- **Foto propia:** una a una desde Admin → Stock, o en lote con el importador por SKU (más abajo).
+- **Foto referencial:** mientras un producto no tenga foto propia, la web muestra una imagen
+  genérica según su categoría (filtro, pastillas, batería…), marcada como *"Imagen referencial"*.
+  Son fotos de Wikimedia Commons con licencia libre; los créditos están en
+  `app/assets/images/repuestos/CREDITOS.md`. Cuando suban la foto real, esa reemplaza a la referencial.
 - Una a una: Admin → Stock → ícono de foto de cada fila (JPG/PNG/WebP, máx. 3 MB).
 - En lote: nombra cada archivo con el SKU (`MR-001.jpg`) y ejecuta
   `cd backend` y `dart run tools\importar_imagenes.dart C:\fotos` (agrega

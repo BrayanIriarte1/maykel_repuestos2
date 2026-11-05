@@ -8,6 +8,7 @@ import '../config.dart';
 import '../models.dart';
 import '../widgets/admin_login_dialog.dart';
 import '../widgets/carrusel_productos.dart';
+import '../widgets/diseno.dart';
 import '../widgets/efectos.dart';
 import '../widgets/mapa_ubicacion.dart';
 import '../widgets/product_card.dart';
@@ -51,6 +52,10 @@ class _HomeScreenState extends State<HomeScreen> {
   List<(String, int)> _marcas = [];
   List<(String, int)> _modelos = [];
   List<String> _categoriasLista = [];
+  List<(String, int)> _categoriasConteo = [];
+  final _marcasKey = GlobalKey();
+  final _categoriasKey = GlobalKey();
+  bool _mostrarSubir = false;
   Timer? _debounce;
   Timer? _autoRefresco;
   EstadoInventario? _estadoInv;
@@ -65,6 +70,10 @@ class _HomeScreenState extends State<HomeScreen> {
     // El stock cambia con cada sincronización (cada 30 min) y con cada venta:
     // el catálogo se actualiza solo cada 2 minutos mientras la pestaña esté abierta.
     _autoRefresco = Timer.periodic(const Duration(minutes: 2), (_) => _refrescarSilencioso());
+    _scrollController.addListener(() {
+      final mostrar = _scrollController.hasClients && _scrollController.offset > 700;
+      if (mostrar != _mostrarSubir) setState(() => _mostrarSubir = mostrar);
+    });
   }
 
   @override
@@ -156,10 +165,31 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         _marcas = f.marcas;
         _modelos = f.modelos;
+        _categoriasConteo = f.categorias;
         _categoriasLista = cats;
       });
+      _cargarVariados();
     } catch (_) {
       // Los filtros son opcionales: si fallan, el catálogo sigue con búsqueda por texto.
+    }
+  }
+
+  /// Suma al grupo de los carruseles productos de las categorías más populares con foto,
+  /// para que no sean siempre los primeros del orden alfabético.
+  Future<void> _cargarVariados() async {
+    try {
+      final cats = _categoriasConteo
+          .where((c) => imagenReferencial(c.$1, '') != null)
+          .take(10)
+          .map((c) => c.$1);
+      final listas = await Future.wait(cats.map((c) => ApiService.instance
+          .getRepuestosPagina(categoria: c, soloDisponibles: true, limite: 10)));
+      if (!mounted) return;
+      final ids = _productos.map((p) => p.id).toSet();
+      final nuevos = [for (final l in listas) ...l.items.where((p) => !ids.contains(p.id))];
+      if (nuevos.isNotEmpty) setState(() => _productos = [..._productos, ...nuevos]);
+    } catch (_) {
+      // Opcional: sin esto los carruseles usan el grupo original.
     }
   }
 
@@ -250,11 +280,20 @@ class _HomeScreenState extends State<HomeScreen> {
     return res;
   }
 
+  /// Prioriza los que tienen foto (propia o referencial) para que el carrusel luzca mejor.
+  List<Repuesto> _conFotoPrimero(Iterable<Repuesto> origen, int max) {
+    final lista = origen.toList();
+    final con = lista.where((p) => fotoDe(p) != null);
+    final res = _variados(con, max);
+    if (res.length >= max) return res;
+    return [...res, ..._variados(lista.where((p) => fotoDe(p) == null), max - res.length)];
+  }
+
   List<Repuesto> get _destacados =>
-      _variados(_productos.where((p) => p.stock > 3), 12);
+      _conFotoPrimero(_productos.where((p) => p.stock > 3), 12);
 
   List<Repuesto> get _ultimas =>
-      _variados(_productos.where((p) => p.stock > 0 && p.stock <= 3), 12);
+      _conFotoPrimero(_productos.where((p) => p.stock > 0 && p.stock <= 3), 12);
 
   void _irAMarca(String marca) {
     _filtrar(() {
@@ -270,156 +309,252 @@ class _HomeScreenState extends State<HomeScreen> {
     _scrollA(_catalogoKey);
   }
 
-  Widget _chipMarca(String nombre, int total, {bool oscuro = false}) {
-    return HoverLift(
-      onTap: () => _irAMarca(nombre),
-      builder: (_, hover) => AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-        decoration: BoxDecoration(
-          color: hover ? AppColors.red : (oscuro ? Colors.white10 : Colors.white),
-          borderRadius: BorderRadius.circular(30),
-          border: Border.all(color: hover ? AppColors.red : AppColors.paper2),
-        ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(Icons.directions_car_filled_outlined,
-              size: 16, color: hover ? Colors.white : AppColors.red),
-          const SizedBox(width: 8),
-          Text(nombre,
-              style: TextStyle(
-                  fontWeight: FontWeight.w800,
-                  color: hover ? Colors.white : (oscuro ? Colors.white : AppColors.char))),
-          const SizedBox(width: 8),
-          Text('$total',
-              style: TextStyle(
-                  fontSize: 12, color: hover ? Colors.white70 : AppColors.steel)),
-        ]),
-      ),
-    );
-  }
-
   List<(String, int)> get _marcasTop {
     final l = [..._marcas]..sort((a, b) => b.$2.compareTo(a.$2));
-    return l.take(14).toList();
+    return l.take(30).toList();
   }
 
-  /// Franja "Compra por marca": accesos directos al filtro del catálogo.
+  /// "Trabajamos con estas marcas": cuadrícula de tarjetas; al tocar una se filtra el catálogo.
   Widget _buildMarcasRapidas(bool esAngosto) {
     if (_marcasTop.isEmpty) return const SizedBox.shrink();
     return Container(
+      key: _marcasKey,
       width: double.infinity,
       color: Colors.white,
       padding: EdgeInsets.symmetric(
-          horizontal: _padX(esAngosto), vertical: esAngosto ? 30 : 44),
+          horizontal: _padX(esAngosto), vertical: esAngosto ? 36 : 64),
       child: Centrado(
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const TituloSeccion(
-                kicker: 'Encuentra el tuyo', titulo: 'Compra por marca de vehículo'),
-            const SizedBox(height: 20),
+            const Revelar(
+              child: Column(children: [
+                Text('¿Buscas un repuesto para marcas chinas e indias?',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        fontSize: 28, fontWeight: FontWeight.w900, color: AppColors.char, height: 1.2)),
+                SizedBox(height: 8),
+                Text('En Maykel Repuestos trabajamos con estas marcas. Toca una para ver sus repuestos.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 15, color: AppColors.steel)),
+              ]),
+            ),
+            const SizedBox(height: 28),
             Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: _marcasTop.map((m) => _chipMarca(m.$1, m.$2)).toList(),
+              alignment: WrapAlignment.center,
+              spacing: 14,
+              runSpacing: 14,
+              children: [
+                for (var i = 0; i < _marcasTop.length; i++)
+                  Revelar(
+                    retrasoMs: (i % 7) * 60,
+                    child: TarjetaMarca(
+                      nombre: _marcasTop[i].$1,
+                      total: _marcasTop[i].$2,
+                      seleccionada: _marca == _marcasTop[i].$1,
+                      onTap: () => _irAMarca(_marcasTop[i].$1),
+                    ),
+                  ),
+              ],
             ),
           ],
         ),
       ),
     );
   }
-
-  static const _iconosCategoria = <String, IconData>{
-    'aceite': Icons.oil_barrel_outlined,
-    'filtro': Icons.filter_alt_outlined,
-    'freno': Icons.disc_full_outlined,
-    'bater': Icons.battery_charging_full,
-    'luz': Icons.lightbulb_outline,
-    'faro': Icons.lightbulb_outline,
-    'suspens': Icons.height,
-    'amortig': Icons.height,
-    'motor': Icons.settings_outlined,
-    'correa': Icons.sync,
-    'bujía': Icons.flash_on_outlined,
-    'bujia': Icons.flash_on_outlined,
-    'refriger': Icons.ac_unit,
-    'radiador': Icons.ac_unit,
-    'embrague': Icons.settings_applications_outlined,
-    'rodam': Icons.circle_outlined,
-    'neum': Icons.tire_repair,
-    'electric': Icons.electrical_services,
-    'escobill': Icons.cleaning_services_outlined,
-    'espejo': Icons.flip,
-  };
-
-  IconData _iconoCategoria(String nombre) {
-    final n = nombre.toLowerCase();
-    for (final e in _iconosCategoria.entries) {
-      if (n.contains(e.key)) return e.value;
-    }
-    return Icons.build_circle_outlined;
-  }
-
-  /// Cuadrícula "Explora por categoría".
+  /// "Explora por categoría": tarjetas con foto, ordenadas por cantidad de productos
+  /// (primero las que tienen una foto adecuada).
   Widget _buildCategoriasRapidas(bool esAngosto) {
-    final cats = _categoriasLista
-        .where((c) => c.trim().isNotEmpty && c.length <= 26)
-        .take(12)
-        .toList();
+    // Una foto por categoría (sin repetir) y completa con tarjetas sin foto.
+    final usadas = <String>{};
+    final conFoto = <(String, int)>[];
+    final resto = <(String, int)>[];
+    for (final c in _categoriasConteo) {
+      final img = imagenReferencial(c.$1, '');
+      if (img != null && usadas.add(img) && conFoto.length < 8) {
+        conFoto.add(c);
+      } else if (img == null) {
+        resto.add(c);
+      }
+    }
+    final cats = [...conFoto, ...resto.take(4)];
     if (cats.isEmpty) return const SizedBox.shrink();
     return Container(
       width: double.infinity,
       color: AppColors.paper,
       padding: EdgeInsets.symmetric(
-          horizontal: _padX(esAngosto), vertical: esAngosto ? 36 : 56),
+          horizontal: _padX(esAngosto), vertical: esAngosto ? 36 : 64),
       child: Centrado(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const TituloSeccion(kicker: 'Todo para tu vehículo', titulo: 'Explora por categoría'),
-            const SizedBox(height: 22),
+            const Revelar(
+              child: TituloSeccion(
+                  kicker: 'Todo para tu vehículo', titulo: 'Explora por categoría'),
+            ),
+            const SizedBox(height: 24),
             LayoutBuilder(builder: (context, c) {
-              final cols = esAngosto ? 2 : (c.maxWidth / 200).floor().clamp(3, 6);
-              const gap = 14.0;
+              final cols = esAngosto ? 2 : (c.maxWidth / 270).floor().clamp(2, 4);
+              const gap = 16.0;
               final w = (c.maxWidth - gap * (cols - 1)) / cols;
               return Wrap(
                 spacing: gap,
                 runSpacing: gap,
-                children: cats
-                    .map((cat) => SizedBox(
-                          width: w,
-                          child: HoverLift(
-                            onTap: () => _irACategoria(cat),
-                            builder: (_, hover) => AnimatedContainer(
-                              duration: const Duration(milliseconds: 160),
-                              padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 12),
-                              decoration: BoxDecoration(
-                                color: hover ? AppColors.char : Colors.white,
-                                borderRadius: BorderRadius.circular(16),
-                                boxShadow: [
-                                  BoxShadow(
-                                      color: Colors.black.withOpacity(hover ? 0.18 : 0.06),
-                                      blurRadius: hover ? 18 : 8,
-                                      offset: const Offset(0, 4))
-                                ],
-                              ),
-                              child: Column(children: [
-                                Icon(_iconoCategoria(cat),
-                                    size: 34,
-                                    color: hover ? AppColors.yellow : AppColors.red),
-                                const SizedBox(height: 10),
-                                Text(cat,
-                                    textAlign: TextAlign.center,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                        color: hover ? Colors.white : AppColors.char)),
-                              ]),
-                            ),
-                          ),
-                        ))
-                    .toList(),
+                children: [
+                  for (var i = 0; i < cats.length; i++)
+                    SizedBox(
+                      width: w,
+                      child: Revelar(
+                        retrasoMs: (i % cols) * 90,
+                        child: TarjetaCategoria(
+                          nombre: cats[i].$1,
+                          total: cats[i].$2,
+                          alto: esAngosto ? 130 : 170,
+                          onTap: () => _irACategoria(cats[i].$1),
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Fila de accesos rápidos justo bajo el hero.
+  Widget _buildInfoCards(bool esAngosto) {
+    final wa = 'https://wa.me/${SiteContent.actual.contactoWhatsapp}';
+    final tarjetas = [
+      TarjetaInfo(
+        icono: Icons.storefront_outlined,
+        titulo: 'Retiro en sucursal',
+        texto: 'Reserva online y retira en Vargas #2275, Calama, sin filas.',
+        boton: 'Cómo llegar',
+        onTap: () => _scrollA(_contactoKey),
+      ),
+      TarjetaInfo(
+        icono: Icons.event_available_outlined,
+        titulo: 'Reserva en línea',
+        texto: 'Elige tu repuesto, reserva y te confirmamos por WhatsApp o correo.',
+        boton: 'Ver catálogo',
+        onTap: () => _scrollA(_catalogoKey),
+      ),
+      TarjetaInfo(
+        icono: Icons.directions_car_outlined,
+        titulo: 'Marcas chinas y más',
+        texto: 'Chery, Great Wall, Changan, JAC, Maxus, MG, Geely, BYD y muchas más.',
+        boton: 'Ver marcas',
+        onTap: () => _scrollA(_marcasKey),
+      ),
+      TarjetaInfo(
+        icono: Icons.engineering_outlined,
+        titulo: 'Talleres y faena minera',
+        texto: 'Atención especial para talleres e insumos de faena minera.',
+        boton: 'Escríbenos',
+        onTap: () => launchUrl(Uri.parse(wa)),
+      ),
+    ];
+    return Container(
+      width: double.infinity,
+      color: AppColors.paper,
+      padding: EdgeInsets.fromLTRB(_padX(esAngosto), esAngosto ? 28 : 44, _padX(esAngosto), 12),
+      child: Centrado(
+        child: LayoutBuilder(builder: (context, c) {
+          final cols = esAngosto ? 1 : (c.maxWidth >= 1000 ? 4 : 2);
+          const gap = 16.0;
+          final w = (c.maxWidth - gap * (cols - 1)) / cols;
+          return Wrap(
+            spacing: gap,
+            runSpacing: gap,
+            children: [
+              for (var i = 0; i < tarjetas.length; i++)
+                SizedBox(width: w, child: Revelar(retrasoMs: i * 110, child: tarjetas[i])),
+            ],
+          );
+        }),
+      ),
+    );
+  }
+
+  /// Cinta animada bajo el hero con datos reales del inventario y de la tienda.
+  Widget _buildMarquesina() {
+    final items = <String>[
+      if (_totalGeneral > 0) '$_totalGeneral productos en catálogo',
+      if (_estadoInv != null) '${_estadoInv!.disponibles} disponibles hoy',
+      'Retiro en Vargas #2275 · Calama',
+      'Reserva online y paga en tienda',
+      for (final m in _marcasTop.take(6)) '${m.$1}: ${m.$2} repuestos',
+      for (final p in _ultimas.take(4)) '¡Quedan ${p.stock}! ${p.nombre}',
+      'Atención por WhatsApp',
+    ];
+    if (items.isEmpty) return const SizedBox.shrink();
+    return Marquesina(
+      fondo: AppColors.red,
+      items: [
+        for (final t in items)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 26),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              const Icon(Icons.bolt, size: 16, color: Colors.white70),
+              const SizedBox(width: 8),
+              Text(t,
+                  style: const TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13.5)),
+            ]),
+          ),
+      ],
+    );
+  }
+
+  /// Sección "Reserva en 3 pasos".
+  Widget _buildPasos(bool esAngosto) {
+    const pasos = [
+      (Icons.search, 'Busca tu repuesto', 'Usa el buscador o filtra por marca, modelo y categoría. Ves el stock al instante.'),
+      (Icons.event_available_outlined, 'Reserva online', 'Elige la cantidad y deja tus datos. Recibes un comprobante con folio único.'),
+      (Icons.storefront_outlined, 'Retira en tienda', 'Te confirmamos por WhatsApp o correo y retiras en Vargas #2275, Calama.'),
+    ];
+    return Container(
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF1A1A1C), Color(0xFF2B1013)]),
+      ),
+      padding: EdgeInsets.symmetric(
+          horizontal: _padX(esAngosto), vertical: esAngosto ? 40 : 70),
+      child: Centrado(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Revelar(
+              child: TituloSeccion(
+                  kicker: 'Así de simple', titulo: 'Reserva en 3 pasos', oscuro: true),
+            ),
+            const SizedBox(height: 28),
+            LayoutBuilder(builder: (context, c) {
+              final cols = esAngosto ? 1 : 3;
+              const gap = 18.0;
+              final w = (c.maxWidth - gap * (cols - 1)) / cols;
+              return Wrap(
+                spacing: gap,
+                runSpacing: gap,
+                children: [
+                  for (var i = 0; i < pasos.length; i++)
+                    SizedBox(
+                      width: w,
+                      child: Revelar(
+                        retrasoMs: i * 140,
+                        child: PasoReserva(
+                          numero: i + 1,
+                          icono: pasos[i].$1,
+                          titulo: pasos[i].$2,
+                          texto: pasos[i].$3,
+                        ),
+                      ),
+                    ),
+                ],
               );
             }),
           ],
@@ -493,13 +628,34 @@ class _HomeScreenState extends State<HomeScreen> {
     final esAngosto = ancho < 760;
 
     return Scaffold(
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () =>
-            launchUrl(Uri.parse('https://wa.me/${SiteContent.actual.contactoWhatsapp}')),
-        backgroundColor: const Color(0xFF25D366),
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.chat_bubble_outline),
-        label: esAngosto ? const SizedBox.shrink() : const Text('Escríbenos'),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          AnimatedScale(
+            scale: _mostrarSubir ? 1 : 0,
+            duration: const Duration(milliseconds: 200),
+            child: FloatingActionButton.small(
+              heroTag: 'subir',
+              tooltip: 'Volver arriba',
+              onPressed: () => _scrollController.animateTo(0,
+                  duration: const Duration(milliseconds: 600), curve: Curves.easeInOutCubic),
+              backgroundColor: AppColors.char,
+              foregroundColor: Colors.white,
+              child: const Icon(Icons.keyboard_arrow_up),
+            ),
+          ),
+          const SizedBox(height: 10),
+          FloatingActionButton.extended(
+            heroTag: 'wa',
+            onPressed: () =>
+                launchUrl(Uri.parse('https://wa.me/${SiteContent.actual.contactoWhatsapp}')),
+            backgroundColor: const Color(0xFF25D366),
+            foregroundColor: Colors.white,
+            icon: const Icon(Icons.chat_bubble_outline),
+            label: esAngosto ? const SizedBox.shrink() : const Text('Escríbenos'),
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -510,28 +666,35 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Column(
                 children: [
                   _buildHero(esAngosto),
+                  _buildMarquesina(),
+                  _buildInfoCards(esAngosto),
                   if (!_cargando && _error == null)
-                    SeccionCarrusel(
-                      kicker: 'Lo más buscado',
-                      titulo: 'Productos destacados',
-                      productos: _destacados,
-                      onReservar: _abrirReserva,
+                    Revelar(
+                      child: SeccionCarrusel(
+                        kicker: 'Lo más buscado',
+                        titulo: 'Productos destacados',
+                        productos: _destacados,
+                        onReservar: _abrirReserva,
+                      ),
                     ),
                   _buildMarcasRapidas(esAngosto),
-                  Container(key: _historiaKey, child: _buildHistoria(esAngosto)),
-                  Container(key: _serviciosKey, child: _buildServicios(esAngosto)),
+                  Container(key: _historiaKey, child: Revelar(child: _buildHistoria(esAngosto))),
+                  Container(key: _serviciosKey, child: Revelar(child: _buildServicios(esAngosto))),
                   if (!_cargando && _error == null)
-                    SeccionCarrusel(
-                      kicker: 'No te quedes sin ellos',
-                      titulo: 'Últimas unidades',
-                      productos: _ultimas,
-                      onReservar: _abrirReserva,
-                      oscuro: true,
-                      lateral: esAngosto ? null : _panelUltimas(),
+                    Revelar(
+                      child: SeccionCarrusel(
+                        kicker: 'No te quedes sin ellos',
+                        titulo: 'Últimas unidades',
+                        productos: _ultimas,
+                        onReservar: _abrirReserva,
+                        oscuro: true,
+                        lateral: esAngosto ? null : _panelUltimas(),
+                      ),
                     ),
-                  _buildCategoriasRapidas(esAngosto),
+                  Container(key: _categoriasKey, child: _buildCategoriasRapidas(esAngosto)),
+                  _buildPasos(esAngosto),
                   Container(key: _catalogoKey, child: _buildCatalogo(esAngosto)),
-                  Container(key: _contactoKey, child: _buildContacto(esAngosto)),
+                  Container(key: _contactoKey, child: Revelar(child: _buildContacto(esAngosto))),
                   _buildFooter(esAngosto),
                 ],
               ),
@@ -562,6 +725,8 @@ class _HomeScreenState extends State<HomeScreen> {
             const Spacer(),
             if (!esAngosto) ...[
               _navLink('Historia', () => _scrollA(_historiaKey)),
+              _navLink('Marcas', () => _scrollA(_marcasKey)),
+              _navLink('Categorías', () => _scrollA(_categoriasKey)),
               _navLink('Servicios', () => _scrollA(_serviciosKey)),
               _navLink('Catálogo', () => _scrollA(_catalogoKey)),
               _navLink('Contacto', () => _scrollA(_contactoKey)),

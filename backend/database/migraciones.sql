@@ -45,6 +45,14 @@ ALTER TABLE productos DROP CONSTRAINT IF EXISTS productos_nombre_no_vacio;
 ALTER TABLE productos ADD CONSTRAINT productos_nombre_no_vacio
   CHECK (length(btrim(nombre)) > 0) NOT VALID;
 
+-- Origen del producto: SISTEMA (viene del sync con el cliente) o MANUAL (creado en el panel).
+-- Solo los de SISTEMA se ponen en stock 0 cuando el cliente deja de enviarlos.
+ALTER TABLE productos ADD COLUMN IF NOT EXISTS origen VARCHAR(10) NOT NULL DEFAULT 'MANUAL';
+-- Solo se ejecuta si aún no hay ningún producto marcado SISTEMA (primera vez / base restaurada).
+UPDATE productos SET origen = 'SISTEMA'
+  WHERE origen = 'MANUAL' AND codigo_interno NOT LIKE 'MR-%'
+    AND NOT EXISTS (SELECT 1 FROM productos WHERE origen = 'SISTEMA');
+
 -- Reservas: indica si ya se descontó su stock (confirmada/entregada), para no descontar dos veces.
 ALTER TABLE reservas ADD COLUMN IF NOT EXISTS stock_descontado BOOLEAN NOT NULL DEFAULT FALSE;
 CREATE INDEX IF NOT EXISTS idx_reservas_retenidas ON reservas (id) WHERE stock_descontado;

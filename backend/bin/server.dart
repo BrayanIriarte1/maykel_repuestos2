@@ -1969,7 +1969,7 @@ void main(List<String> args) async {
                   SELECT SUM(rd.cantidad) FROM reserva_detalles rd
                   JOIN reservas rs ON rs.id = rd.reserva_id
                   WHERE rd.producto_id = productos.id AND rs.estado = 'confirmada' AND rs.stock_descontado), 0)),
-                ultima_sincronizacion = CURRENT_TIMESTAMP,
+                ultima_sincronizacion = CURRENT_TIMESTAMP, origen = 'SISTEMA',
                 precio_referencia = COALESCE(@precio, precio_referencia),
                 categoria_id = COALESCE(categoria_id, @cat),
                 nombre = CASE
@@ -1996,9 +1996,9 @@ void main(List<String> args) async {
         await db.conn.execute(
           Sql.named('''
             INSERT INTO productos (codigo_interno, nombre, stock_actual, estado_catalogo, categoria_id, precio_referencia,
-                                   marca_referencia, modelo_referencia)
+                                   marca_referencia, modelo_referencia, origen)
             VALUES (@sku, @nombre, @stock, @estado, @cat, @precio,
-                    COALESCE(@marca::text, 'General'), COALESCE(@modelo::text, 'General'))
+                    COALESCE(@marca::text, 'General'), COALESCE(@modelo::text, 'General'), 'SISTEMA')
           '''),
           parameters: {
             'estado': publicar ? 'PUBLICADO' : 'PENDIENTE',
@@ -2025,15 +2025,35 @@ void main(List<String> args) async {
     if (body?['parcial'] != true) {
       final resumen = body?['resumen'] is Map ? body!['resumen'] as Map : const {};
       int previo(String k) => resumen[k] is num ? (resumen[k] as num).toInt() : 0;
+      final total = previo('procesados') + procesados;
+
+      // Sync COMPLETO y sin errores: lo que el cliente ya no envía queda en stock 0 (agotado).
+      // Protecciones: solo productos de origen SISTEMA, no vistos en esta corrida (30 min de margen)
+      // y solo si llegó al menos el 90 % de lo que el sistema enviaba antes.
+      var retirados = 0;
+      if (body?['completo'] == true) {
+        final base = _numDe((await db.conn.execute(
+                "SELECT COUNT(*) FROM productos WHERE origen = 'SISTEMA'"))
+            .first[0]);
+        if (base > 0 && total >= base * 0.9) {
+          final r = await db.conn.execute(
+              "UPDATE productos SET stock_actual = 0 WHERE origen = 'SISTEMA' AND stock_actual > 0 "
+              "AND ultima_sincronizacion < NOW() - INTERVAL '30 minutes' RETURNING id");
+          retirados = r.length;
+        }
+      }
       await db.conn.execute(
         Sql.named('''
           INSERT INTO logs_sincronizacion (total_procesados, total_agotados, nuevos_pendientes, estado, mensaje_detalle)
-          VALUES (@proc, @agot, @nuevos, 'EXITOSO', 'Sincronización unidireccional completada')
+          VALUES (@proc, @agot, @nuevos, 'EXITOSO', @msg)
         '''),
         parameters: {
-          'proc': previo('procesados') + procesados,
+          'proc': total,
           'agot': previo('agotados') + agotados,
           'nuevos': previo('nuevos') + nuevosPendientes,
+          'msg': retirados > 0
+              ? 'Sincronización completada. $retirados producto(s) ya no vienen del sistema del cliente: stock en 0.'
+              : 'Sincronización unidireccional completada',
         },
       );
     }

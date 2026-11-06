@@ -297,6 +297,7 @@ Future<bool> sincronizarUnaVez(
                 'productos': lote,
                 'publicar': sistema != null,
                 'parcial': !(esUltimo && ok),
+                if (esUltimo && ok && lectura.errores.isEmpty) 'completo': true,
                 if (esUltimo)
                   'resumen': {
                     'procesados': acumProcesados,
@@ -323,7 +324,8 @@ Future<bool> sincronizarUnaVez(
           stderr.writeln('  Intento $intento fallÃ³ (${r.statusCode})');
         }
       } catch (e) {
-        stderr.writeln('  Intento $intento sin conexiÃ³n: $e');
+        stderr.writeln('  Intento $intento: no se pudo conectar con el servidor de la tienda ($url). '
+            '¿Está encendido? Detalle: $e');
       }
       if (!enviado) await Future<void>.delayed(Duration(seconds: 2 * intento));
     }

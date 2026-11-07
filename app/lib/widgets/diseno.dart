@@ -189,8 +189,43 @@ class _MarquesinaState extends State<Marquesina> with SingleTickerProviderStateM
 }
 
 // ---------------------------------------------------------------------------
-// Tarjeta de marca (estilo "wordmark")
+// Tarjeta de marca con logo (se vuelve a color y sube al pasar el mouse)
 // ---------------------------------------------------------------------------
+
+const Map<String, String> _logosMarca = {
+  'CHERY': 'chery',
+  'GREAT WALL': 'great-wall',
+  'CHANGAN': 'changan',
+  'JAC': 'jac',
+  'MAXUS': 'maxus',
+  'MG': 'mg',
+  'GEELY': 'geely',
+  'BRILLIANCE': 'brilliance',
+  'BYD': 'byd',
+  'LIFAN': 'lifan',
+  'BAIC': 'baic-motor',
+  'MAHINDRA': 'mahindra',
+  'JMC': 'jmc',
+  'HAVAL': 'haval',
+  'FOTON': 'foton',
+  'HYUNDAI': 'hyundai',
+  'HAIMA': 'haima',
+  'ZOTYE': 'zotye',
+  'CHEVROLET': 'chevrolet',
+  'NISSAN': 'nissan',
+  'FAW': 'faw',
+  'TOYOTA': 'toyota',
+  'HAFEI': 'hafei',
+  'SSANGYONG': 'ssangyong',
+  'DONGFENG': 'dongfeng',
+  'JETOUR': 'jetour',
+};
+
+/// Ruta del logo de la marca (assets/images/marcas) o null si no hay.
+String? logoDeMarca(String nombre) {
+  final slug = _logosMarca[nombre.trim().toUpperCase()];
+  return slug == null ? null : 'assets/images/marcas/$slug.png';
+}
 
 class TarjetaMarca extends StatelessWidget {
   final String nombre;
@@ -205,36 +240,81 @@ class TarjetaMarca extends StatelessWidget {
     this.seleccionada = false,
   });
 
+  static const _gris = ColorFilter.matrix(<double>[
+    0.2126, 0.7152, 0.0722, 0, 0,
+    0.2126, 0.7152, 0.0722, 0, 0,
+    0.2126, 0.7152, 0.0722, 0, 0,
+    0, 0, 0, 1, 0,
+  ]);
+
   @override
   Widget build(BuildContext context) {
+    final logo = logoDeMarca(nombre);
     return HoverLift(
       onTap: onTap,
       builder: (_, hover) {
         final activa = hover || seleccionada;
+        final inicial = nombre.isEmpty ? '?' : nombre.trim()[0].toUpperCase();
         return AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          width: 112,
-          height: 112,
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+          duration: const Duration(milliseconds: 220),
+          width: 168,
+          height: 168,
+          padding: const EdgeInsets.fromLTRB(12, 16, 12, 12),
           decoration: BoxDecoration(
-            color: activa ? AppColors.red : Colors.white,
-            borderRadius: BorderRadius.circular(14),
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
             border: Border.all(
-                color: activa ? AppColors.red : AppColors.red.withValues(alpha: 0.35), width: 1.6),
+                color: activa ? AppColors.red : AppColors.paper2, width: activa ? 2 : 1.4),
             boxShadow: [
               BoxShadow(
-                color: (activa ? AppColors.red : Colors.black).withValues(alpha: activa ? 0.28 : 0.05),
-                blurRadius: activa ? 20 : 8,
-                offset: const Offset(0, 6),
+                color: (activa ? AppColors.red : Colors.black).withValues(alpha: activa ? 0.22 : 0.05),
+                blurRadius: activa ? 26 : 10,
+                offset: const Offset(0, 10),
               ),
             ],
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.directions_car_filled_rounded,
-                  size: 22, color: activa ? Colors.white70 : AppColors.red.withValues(alpha: 0.55)),
-              const SizedBox(height: 6),
+              SizedBox(
+                height: 70,
+                child: AnimatedScale(
+                  scale: activa ? 1.12 : 1,
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOut,
+                  child: logo == null
+                      ? Container(
+                          width: 64,
+                          height: 64,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: const LinearGradient(
+                                colors: [AppColors.red, AppColors.redDark],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight),
+                          ),
+                          child: Text(inicial,
+                              style: const TextStyle(
+                                  color: Colors.white, fontSize: 28, fontWeight: FontWeight.w900)),
+                        )
+                      : AnimatedOpacity(
+                          opacity: activa ? 1 : 0.8,
+                          duration: const Duration(milliseconds: 220),
+                          child: ColorFiltered(
+                            colorFilter: activa ? const ColorFilter.mode(Colors.transparent, BlendMode.dst) : _gris,
+                            child: Image.asset(logo,
+                                height: 70,
+                                width: 110,
+                                fit: BoxFit.contain,
+                                filterQuality: FilterQuality.medium,
+                                errorBuilder: (_, __, ___) => const Icon(Icons.directions_car_filled_rounded,
+                                    size: 40, color: AppColors.red)),
+                          ),
+                        ),
+                ),
+              ),
+              const SizedBox(height: 10),
               SizedBox(
                 width: double.infinity,
                 child: FittedBox(
@@ -242,18 +322,17 @@ class TarjetaMarca extends StatelessWidget {
                   child: Text(
                     nombre.toUpperCase(),
                     style: TextStyle(
-                      fontSize: 17,
+                      fontSize: 15,
                       fontWeight: FontWeight.w900,
                       letterSpacing: 0.6,
-                      color: activa ? Colors.white : AppColors.red,
+                      color: activa ? AppColors.red : AppColors.char,
                     ),
                   ),
                 ),
               ),
               const SizedBox(height: 4),
               Text('$total productos',
-                  style: TextStyle(
-                      fontSize: 10.5, color: activa ? Colors.white70 : AppColors.steel)),
+                  style: const TextStyle(fontSize: 11.5, color: AppColors.steel)),
             ],
           ),
         );
@@ -394,17 +473,17 @@ class TarjetaInfo extends StatelessWidget {
     return HoverLift(
       onTap: onTap,
       builder: (_, hover) => AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.all(22),
+        duration: const Duration(milliseconds: 220),
+        padding: const EdgeInsets.all(30),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: hover ? AppColors.red : AppColors.paper2, width: 1.4),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: hover ? AppColors.red : AppColors.paper2, width: 1.6),
           boxShadow: [
             BoxShadow(
-                color: Colors.black.withValues(alpha: hover ? 0.12 : 0.05),
-                blurRadius: hover ? 22 : 10,
-                offset: const Offset(0, 8)),
+                color: (hover ? AppColors.red : Colors.black).withValues(alpha: hover ? 0.16 : 0.06),
+                blurRadius: hover ? 30 : 14,
+                offset: const Offset(0, 10)),
           ],
         ),
         child: Column(
@@ -412,33 +491,39 @@ class TarjetaInfo extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
                     colors: [AppColors.red, AppColors.redDark],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight),
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: [
+                  BoxShadow(
+                      color: AppColors.red.withValues(alpha: hover ? 0.4 : 0.2),
+                      blurRadius: hover ? 18 : 10,
+                      offset: const Offset(0, 6)),
+                ],
               ),
-              child: Icon(icono, color: Colors.white, size: 26),
+              child: Icon(icono, color: Colors.white, size: 32),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 22),
             Text(titulo,
                 style: const TextStyle(
-                    fontSize: 17, fontWeight: FontWeight.w900, color: AppColors.char)),
-            const SizedBox(height: 6),
+                    fontSize: 20, fontWeight: FontWeight.w900, color: AppColors.char)),
+            const SizedBox(height: 8),
             Text(texto,
-                style: const TextStyle(color: AppColors.steel, fontSize: 13, height: 1.5)),
-            const SizedBox(height: 14),
+                style: const TextStyle(color: AppColors.steel, fontSize: 15, height: 1.55)),
+            const SizedBox(height: 18),
             Row(mainAxisSize: MainAxisSize.min, children: [
               Text(boton,
                   style: const TextStyle(
-                      color: AppColors.red, fontWeight: FontWeight.w800, fontSize: 13)),
-              const SizedBox(width: 4),
+                      color: AppColors.red, fontWeight: FontWeight.w800, fontSize: 15)),
+              const SizedBox(width: 6),
               AnimatedSlide(
-                offset: hover ? const Offset(0.3, 0) : Offset.zero,
-                duration: const Duration(milliseconds: 180),
-                child: const Icon(Icons.arrow_forward, size: 15, color: AppColors.red),
+                offset: hover ? const Offset(0.4, 0) : Offset.zero,
+                duration: const Duration(milliseconds: 200),
+                child: const Icon(Icons.arrow_forward, size: 18, color: AppColors.red),
               ),
             ]),
           ],

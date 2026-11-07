@@ -30,5 +30,6 @@ flutter:
     - assets/images/logo.jpg
     - assets/images/logo_maykel.jpg
     - assets/images/repuestos/
+    - assets/images/marcas/
     - assets/fonts/Roboto-Regular.ttf
     - assets/fonts/Roboto-Bold.ttf

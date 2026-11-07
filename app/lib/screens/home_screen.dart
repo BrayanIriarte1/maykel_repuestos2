@@ -323,7 +323,7 @@ class _HomeScreenState extends State<HomeScreen> {
       width: double.infinity,
       color: Colors.white,
       padding: EdgeInsets.symmetric(
-          horizontal: _padX(esAngosto), vertical: esAngosto ? 36 : 64),
+          horizontal: _padX(esAngosto), vertical: esAngosto ? 40 : 90),
       child: Centrado(
         child: Column(
           children: [
@@ -331,19 +331,29 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Column(children: [
                 Text(SiteContent.actual.marcasTitulo,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
-                        fontSize: 28, fontWeight: FontWeight.w900, color: AppColors.char, height: 1.2)),
-                const SizedBox(height: 8),
+                    style: TextStyle(
+                        fontSize: esAngosto ? 28 : 40,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.char,
+                        height: 1.2)),
+                const SizedBox(height: 14),
+                Container(
+                  width: 76,
+                  height: 5,
+                  decoration: BoxDecoration(
+                      color: AppColors.red, borderRadius: BorderRadius.circular(4)),
+                ),
+                const SizedBox(height: 14),
                 Text(SiteContent.actual.marcasSubtitulo,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 15, color: AppColors.steel)),
+                    style: TextStyle(fontSize: esAngosto ? 15 : 18, color: AppColors.steel)),
               ]),
             ),
-            const SizedBox(height: 28),
+            const SizedBox(height: 44),
             Wrap(
               alignment: WrapAlignment.center,
-              spacing: 14,
-              runSpacing: 14,
+              spacing: 22,
+              runSpacing: 22,
               children: [
                 for (var i = 0; i < _marcasTop.length; i++)
                   Revelar(
@@ -459,11 +469,11 @@ class _HomeScreenState extends State<HomeScreen> {
     return Container(
       width: double.infinity,
       color: AppColors.paper,
-      padding: EdgeInsets.fromLTRB(_padX(esAngosto), esAngosto ? 28 : 44, _padX(esAngosto), 12),
+      padding: EdgeInsets.fromLTRB(_padX(esAngosto), esAngosto ? 28 : 64, _padX(esAngosto), esAngosto ? 12 : 40),
       child: Centrado(
         child: LayoutBuilder(builder: (context, c) {
           final cols = esAngosto ? 1 : (c.maxWidth >= 1000 ? 4 : 2);
-          const gap = 16.0;
+          const gap = 24.0;
           final w = (c.maxWidth - gap * (cols - 1)) / cols;
           return Wrap(
             spacing: gap,
@@ -775,51 +785,57 @@ class _HomeScreenState extends State<HomeScreen> {
   // ---------- Navbar ----------
 
   Widget _buildNavbar(bool esAngosto) {
-    return Material(
-      color: AppColors.char,
-      elevation: 6,
-      child: Container(
-        padding: EdgeInsets.symmetric(horizontal: esAngosto ? 16 : 40, vertical: 12),
-        child: Row(
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: Image.asset('assets/images/logo_maykel.jpg',
-                  height: esAngosto ? 38 : 46, fit: BoxFit.contain),
-            ),
-            const Spacer(),
-            if (!esAngosto) ...[
-              _navLink('Historia', () => _scrollA(_historiaKey)),
-              _navLink('Marcas', () => _scrollA(_marcasKey)),
-              _navLink('Categorías', () => _scrollA(_categoriasKey)),
-              _navLink('Servicios', () => _scrollA(_serviciosKey)),
-              _navLink('Catálogo', () => _scrollA(_catalogoKey)),
-              _navLink('Contacto', () => _scrollA(_contactoKey)),
-              const SizedBox(width: 12),
-            ],
-            OutlinedButton.icon(
-              onPressed: _abrirAdmin,
-              icon: const Icon(Icons.lock_outline, size: 16),
-              label: const Text('Admin'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.white,
-                side: const BorderSide(color: Colors.white30),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(colors: [Color(0xFF141416), Color(0xFF241013), Color(0xFF141416)]),
+        border: Border(bottom: BorderSide(color: AppColors.red, width: 3)),
+        boxShadow: [BoxShadow(color: Color(0x66000000), blurRadius: 14, offset: Offset(0, 4))],
+      ),
+      padding: EdgeInsets.symmetric(horizontal: esAngosto ? 16 : 48, vertical: esAngosto ? 10 : 14),
+      child: Row(
+        children: [
+          HoverLift(
+            onTap: () => _scrollController.animateTo(0,
+                duration: const Duration(milliseconds: 600), curve: Curves.easeInOutCubic),
+            builder: (_, hover) => AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                      color: AppColors.red.withValues(alpha: hover ? 0.55 : 0.25),
+                      blurRadius: hover ? 28 : 16),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.asset('assets/images/logo_maykel.jpg',
+                    height: esAngosto ? 46 : 74, fit: BoxFit.contain),
               ),
             ),
+          ),
+          const Spacer(),
+          if (!esAngosto) ...[
+            EnlaceNav('Historia', Icons.history_edu_outlined, () => _scrollA(_historiaKey)),
+            EnlaceNav('Marcas', Icons.directions_car_outlined, () => _scrollA(_marcasKey)),
+            EnlaceNav('Categorías', Icons.category_outlined, () => _scrollA(_categoriasKey)),
+            EnlaceNav('Servicios', Icons.build_circle_outlined, () => _scrollA(_serviciosKey)),
+            EnlaceNav('Catálogo', Icons.grid_view_rounded, () => _scrollA(_catalogoKey)),
+            EnlaceNav('Contacto', Icons.mail_outline, () => _scrollA(_contactoKey)),
+            const SizedBox(width: 20),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _navLink(String texto, VoidCallback onTap) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: TextButton(
-        onPressed: onTap,
-        style: TextButton.styleFrom(foregroundColor: Colors.white70),
-        child: Text(texto, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+          ElevatedButton.icon(
+            onPressed: _abrirAdmin,
+            icon: const Icon(Icons.lock_outline, size: 18),
+            label: const Text('Admin'),
+            style: ElevatedButton.styleFrom(
+              padding: EdgeInsets.symmetric(
+                  horizontal: esAngosto ? 14 : 24, vertical: esAngosto ? 10 : 16),
+              textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -827,11 +843,12 @@ class _HomeScreenState extends State<HomeScreen> {
   // ---------- Hero ----------
 
   Widget _buildHero(bool esAngosto) {
+    final grande = MediaQuery.of(context).size.width >= 1600;
     final textos = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
           decoration: BoxDecoration(
             color: AppColors.red.withValues(alpha: 0.18),
             borderRadius: BorderRadius.circular(20),
@@ -840,39 +857,41 @@ class _HomeScreenState extends State<HomeScreen> {
           child: const Text('CALAMA · REGIÓN DE ANTOFAGASTA',
               style: TextStyle(
                   color: AppColors.yellow,
-                  fontSize: 11,
+                  fontSize: 13,
                   fontWeight: FontWeight.w800,
-                  letterSpacing: 1.2)),
+                  letterSpacing: 1.4)),
         ),
-        const SizedBox(height: 18),
+        const SizedBox(height: 22),
         Text(
           SiteContent.actual.heroTitulo,
           style: TextStyle(
             color: Colors.white,
-            fontSize: esAngosto ? 34 : 54,
+            fontSize: esAngosto ? 36 : (grande ? 82 : 66),
             fontWeight: FontWeight.w900,
-            height: 1.05,
+            height: 1.03,
           ),
         ),
-        const SizedBox(height: 18),
+        const SizedBox(height: 22),
         ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 520),
+          constraints: const BoxConstraints(maxWidth: 680),
           child: Text(
             SiteContent.actual.heroSubtitulo,
-            style: const TextStyle(color: Colors.white70, fontSize: 16, height: 1.55),
+            style: TextStyle(
+                color: Colors.white70, fontSize: esAngosto ? 16 : (grande ? 21 : 19), height: 1.55),
           ),
         ),
-        const SizedBox(height: 28),
+        const SizedBox(height: 34),
         Wrap(
-          spacing: 12,
-          runSpacing: 12,
+          spacing: 14,
+          runSpacing: 14,
           children: [
             ElevatedButton.icon(
               onPressed: () => _scrollA(_catalogoKey),
-              icon: const Icon(Icons.search, size: 18),
+              icon: const Icon(Icons.search, size: 22),
               style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                padding: EdgeInsets.symmetric(horizontal: esAngosto ? 24 : 34, vertical: esAngosto ? 16 : 22),
+                textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(34)),
               ),
               label: Text(SiteContent.actual.heroBotonCatalogo),
             ),
@@ -880,18 +899,19 @@ class _HomeScreenState extends State<HomeScreen> {
               onPressed: () => _scrollA(_contactoKey),
               style: OutlinedButton.styleFrom(
                 foregroundColor: Colors.white,
-                side: const BorderSide(color: Colors.white54),
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                side: const BorderSide(color: Colors.white54, width: 1.5),
+                padding: EdgeInsets.symmetric(horizontal: esAngosto ? 24 : 34, vertical: esAngosto ? 16 : 22),
+                textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(34)),
               ),
               child: Text(SiteContent.actual.heroBotonContacto),
             ),
           ],
         ),
-        const SizedBox(height: 36),
+        const SizedBox(height: 44),
         Wrap(
-          spacing: 14,
-          runSpacing: 14,
+          spacing: 18,
+          runSpacing: 18,
           children: [
             _statHero(_totalGeneral > 0 ? '$_totalGeneral' : '${_productos.length}', SiteContent.actual.heroEstadisticaProductosEtiqueta),
             _statHero(_marcas.isNotEmpty ? '${_marcas.length}+' : SiteContent.actual.heroEstadisticaMarcasValor,
@@ -905,7 +925,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final destacados = _productos.where((p) => p.stock > 0).take(5).toList();
     final carrusel = (!_cargando && destacados.isNotEmpty)
-        ? HeroCarrusel(productos: destacados, onReservar: _abrirReserva)
+        ? HeroCarrusel(
+            productos: destacados,
+            onReservar: _abrirReserva,
+            alto: esAngosto ? 300 : (grande ? 470 : 400))
         : const SizedBox.shrink();
 
     return Container(
@@ -946,16 +969,16 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           Padding(
             padding: EdgeInsets.symmetric(
-                horizontal: _padX(esAngosto), vertical: esAngosto ? 40 : 80),
+                horizontal: _padX(esAngosto), vertical: esAngosto ? 40 : 100),
             child: Centrado(
               child: esAngosto
                   ? Column(children: [textos, const SizedBox(height: 32), carrusel])
                   : Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        Expanded(flex: 6, child: textos),
-                        const SizedBox(width: 48),
-                        Expanded(flex: 5, child: carrusel),
+                        Expanded(flex: 11, child: textos),
+                        const SizedBox(width: 64),
+                        Expanded(flex: 10, child: carrusel),
                       ],
                     ),
             ),
@@ -967,19 +990,24 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _statHero(String numero, String etiqueta) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 18),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white12),
+        gradient: LinearGradient(
+          colors: [Colors.white.withValues(alpha: 0.10), Colors.white.withValues(alpha: 0.03)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white24),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(numero,
               style: const TextStyle(
-                  color: AppColors.yellow, fontSize: 28, fontWeight: FontWeight.w900)),
-          Text(etiqueta, style: const TextStyle(color: Colors.white60, fontSize: 12)),
+                  color: AppColors.yellow, fontSize: 40, fontWeight: FontWeight.w900, height: 1.1)),
+          const SizedBox(height: 2),
+          Text(etiqueta, style: const TextStyle(color: Colors.white70, fontSize: 14)),
         ],
       ),
     );
@@ -1001,7 +1029,7 @@ class _HomeScreenState extends State<HomeScreen> {
       width: double.infinity,
       color: Colors.white,
       padding: EdgeInsets.symmetric(
-          horizontal: _padX(esAngosto), vertical: esAngosto ? 40 : 70),
+          horizontal: _padX(esAngosto), vertical: esAngosto ? 40 : 100),
       child: Centrado(
         child: Flex(
           direction: esAngosto ? Axis.vertical : Axis.horizontal,
@@ -1015,15 +1043,16 @@ class _HomeScreenState extends State<HomeScreen> {
                   TituloSeccion(
                       kicker: SiteContent.actual.historiaKicker,
                       titulo: SiteContent.actual.historiaTitulo),
-                  const SizedBox(height: 22),
+                  const SizedBox(height: 28),
                   Text(
                     SiteContent.actual.historiaTexto,
-                    style: const TextStyle(color: AppColors.steel, fontSize: 15, height: 1.75),
+                    style: TextStyle(
+                        color: AppColors.steel, fontSize: esAngosto ? 15 : 18, height: 1.8),
                   ),
                 ],
               ),
             ),
-            SizedBox(width: esAngosto ? 0 : 48, height: esAngosto ? 28 : 0),
+            SizedBox(width: esAngosto ? 0 : 72, height: esAngosto ? 28 : 0),
             Expanded(
               flex: esAngosto ? 0 : 5,
               child: Column(
@@ -1041,43 +1070,52 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _filaFicha(IconData icono, String etiqueta, String valor) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.paper,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.paper2),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: AppColors.red.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(10),
+    return HoverLift(
+      builder: (_, hover) => AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: hover ? Colors.white : AppColors.paper,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: hover ? AppColors.red : AppColors.paper2, width: 1.4),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withValues(alpha: hover ? 0.10 : 0),
+                blurRadius: 20,
+                offset: const Offset(0, 8)),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: hover ? AppColors.red : AppColors.red.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(icono, color: hover ? Colors.white : AppColors.red, size: 28),
             ),
-            child: Icon(icono, color: AppColors.red, size: 22),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(etiqueta.toUpperCase(),
-                    style: const TextStyle(
-                        fontSize: 10.5,
-                        letterSpacing: 0.8,
-                        color: AppColors.steel,
-                        fontWeight: FontWeight.w800)),
-                const SizedBox(height: 2),
-                Text(valor,
-                    style: const TextStyle(
-                        fontSize: 14, color: AppColors.char, fontWeight: FontWeight.w600)),
-              ],
+            const SizedBox(width: 20),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(etiqueta.toUpperCase(),
+                      style: const TextStyle(
+                          fontSize: 12,
+                          letterSpacing: 1,
+                          color: AppColors.steel,
+                          fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 4),
+                  Text(valor,
+                      style: const TextStyle(
+                          fontSize: 17, color: AppColors.char, fontWeight: FontWeight.w700)),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1106,7 +1144,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
       padding: EdgeInsets.symmetric(
-          horizontal: _padX(esAngosto), vertical: esAngosto ? 40 : 70),
+          horizontal: _padX(esAngosto), vertical: esAngosto ? 40 : 100),
       child: Centrado(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1115,10 +1153,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 kicker: SiteContent.actual.serviciosKicker,
                 titulo: SiteContent.actual.serviciosTitulo,
                 oscuro: true),
-            const SizedBox(height: 32),
+            const SizedBox(height: 44),
             LayoutBuilder(builder: (context, c) {
               final cols = esAngosto ? 1 : (c.maxWidth > 900 ? 4 : 2);
-              const gap = 18.0;
+              const gap = 24.0;
               final w = (c.maxWidth - gap * (cols - 1)) / cols;
               return Wrap(
                 spacing: gap,
@@ -1129,39 +1167,52 @@ class _HomeScreenState extends State<HomeScreen> {
                       width: w,
                       child: HoverLift(
                         builder: (context, hover) => AnimatedContainer(
-                          duration: const Duration(milliseconds: 180),
-                          height: 190,
-                          padding: const EdgeInsets.all(20),
+                          duration: const Duration(milliseconds: 220),
+                          height: esAngosto ? 210 : 260,
+                          padding: const EdgeInsets.all(28),
                           decoration: BoxDecoration(
-                            color: hover ? const Color(0xFF2E2E32) : AppColors.char2,
-                            borderRadius: BorderRadius.circular(16),
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: hover
+                                  ? const [Color(0xFF3A1317), Color(0xFF2A2A2E)]
+                                  : const [AppColors.char2, AppColors.char2],
+                            ),
+                            borderRadius: BorderRadius.circular(22),
                             border: Border.all(
-                                color: hover ? AppColors.red : Colors.white12),
+                                color: hover ? AppColors.red : Colors.white12, width: 1.5),
+                            boxShadow: [
+                              BoxShadow(
+                                  color: AppColors.red.withValues(alpha: hover ? 0.25 : 0),
+                                  blurRadius: 28,
+                                  offset: const Offset(0, 12)),
+                            ],
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Container(
-                                padding: const EdgeInsets.all(10),
+                              AnimatedContainer(
+                                duration: const Duration(milliseconds: 220),
+                                padding: const EdgeInsets.all(15),
                                 decoration: BoxDecoration(
                                   color: AppColors.red,
-                                  borderRadius: BorderRadius.circular(12),
+                                  borderRadius: BorderRadius.circular(hover ? 28 : 16),
                                 ),
                                 child: Icon(_iconosServicio[i % _iconosServicio.length],
-                                    color: Colors.white, size: 22),
+                                    color: Colors.white, size: 30),
                               ),
-                              const SizedBox(height: 14),
+                              const SizedBox(height: 20),
                               Text(servicios[i].titulo,
                                   style: const TextStyle(
                                       color: Colors.white,
                                       fontWeight: FontWeight.w800,
-                                      fontSize: 15.5)),
-                              const SizedBox(height: 6),
+                                      fontSize: 19)),
+                              const SizedBox(height: 8),
                               Expanded(
                                 child: Text(servicios[i].descripcion,
                                     overflow: TextOverflow.fade,
                                     style: const TextStyle(
-                                        color: Colors.white60, fontSize: 13, height: 1.5)),
+                                        color: Colors.white70, fontSize: 15, height: 1.55)),
                               ),
                             ],
                           ),

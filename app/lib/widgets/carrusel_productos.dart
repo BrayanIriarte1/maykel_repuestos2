@@ -27,12 +27,12 @@ class CarruselProductos extends StatefulWidget {
 }
 
 class _CarruselProductosState extends State<CarruselProductos> {
-  static const double _ancho = 260;
-  static const double _gap = 16;
+  static const double _gap = 18;
 
   final _ctrl = ScrollController();
   Timer? _timer;
   bool _pausa = false;
+  double _paso = 280;
 
   @override
   void initState() {
@@ -57,9 +57,8 @@ class _CarruselProductosState extends State<CarruselProductos> {
 
   void _mover(int dir, {bool ciclico = false}) {
     if (!_ctrl.hasClients || !_ctrl.position.hasContentDimensions) return;
-    final paso = (_ancho + _gap) * (MediaQuery.of(context).size.width < 760 ? 1 : 2);
     final max = _ctrl.position.maxScrollExtent;
-    var destino = _ctrl.offset + dir * paso;
+    var destino = _ctrl.offset + dir * _paso;
     if (ciclico && _ctrl.offset >= max - 4 && dir > 0) destino = 0;
     _ctrl.animateTo(destino.clamp(0, max),
         duration: const Duration(milliseconds: 450), curve: Curves.easeInOut);
@@ -67,13 +66,13 @@ class _CarruselProductosState extends State<CarruselProductos> {
 
   Widget _flecha(IconData icono, VoidCallback onTap) => Material(
         color: Colors.white,
-        elevation: 3,
+        elevation: 4,
         shape: const CircleBorder(),
         child: InkWell(
           customBorder: const CircleBorder(),
           onTap: onTap,
           child: Padding(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(10),
             child: Icon(icono, color: AppColors.char),
           ),
         ),
@@ -81,38 +80,44 @@ class _CarruselProductosState extends State<CarruselProductos> {
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => _pausa = true,
-      onExit: (_) => _pausa = false,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          SizedBox(
-            height: 300,
-            child: ListView.separated(
-              controller: _ctrl,
-              scrollDirection: Axis.horizontal,
-              clipBehavior: Clip.none,
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              itemCount: widget.productos.length,
-              separatorBuilder: (_, __) => const SizedBox(width: _gap),
-              itemBuilder: (_, i) => Align(
-                alignment: Alignment.topCenter,
-                child: SizedBox(
-                  width: _ancho,
-                  child: ProductCard(
-                    producto: widget.productos[i],
-                    onReservar: () => widget.onReservar(widget.productos[i]),
+    return LayoutBuilder(builder: (context, c) {
+      // Las tarjetas se reparten todo el ancho disponible (más grandes en pantallas amplias).
+      final n = c.maxWidth >= 1300 ? 5 : (c.maxWidth >= 980 ? 4 : (c.maxWidth >= 680 ? 3 : (c.maxWidth >= 460 ? 2 : 1)));
+      final ancho = (c.maxWidth - _gap * (n - 1)) / n;
+      _paso = (ancho + _gap) * (n > 2 ? n - 1 : 1);
+      return MouseRegion(
+        onEnter: (_) => _pausa = true,
+        onExit: (_) => _pausa = false,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            SizedBox(
+              height: 330,
+              child: ListView.separated(
+                controller: _ctrl,
+                scrollDirection: Axis.horizontal,
+                clipBehavior: Clip.none,
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                itemCount: widget.productos.length,
+                separatorBuilder: (_, __) => const SizedBox(width: _gap),
+                itemBuilder: (_, i) => Align(
+                  alignment: Alignment.topCenter,
+                  child: SizedBox(
+                    width: ancho,
+                    child: ProductCard(
+                      producto: widget.productos[i],
+                      onReservar: () => widget.onReservar(widget.productos[i]),
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-          Positioned(left: -14, child: _flecha(Icons.chevron_left, () => _mover(-1))),
-          Positioned(right: -14, child: _flecha(Icons.chevron_right, () => _mover(1))),
-        ],
-      ),
-    );
+            Positioned(left: -18, child: _flecha(Icons.chevron_left, () => _mover(-1))),
+            Positioned(right: -18, child: _flecha(Icons.chevron_right, () => _mover(1))),
+          ],
+        ),
+      );
+    });
   }
 }
 
@@ -143,13 +148,13 @@ class SeccionCarrusel extends StatelessWidget {
       width: double.infinity,
       color: oscuro ? AppColors.char : AppColors.paper,
       padding: EdgeInsets.symmetric(
-          horizontal: esAngosto ? 28 : 60, vertical: esAngosto ? 36 : 56),
+          horizontal: esAngosto ? 28 : 60, vertical: esAngosto ? 36 : 84),
       child: Centrado(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             TituloSeccion(kicker: kicker, titulo: titulo, oscuro: oscuro),
-            const SizedBox(height: 24),
+            const SizedBox(height: 36),
             if (lateral == null)
               CarruselProductos(productos: productos, onReservar: onReservar)
             else
@@ -174,7 +179,9 @@ class SeccionCarrusel extends StatelessWidget {
 class HeroCarrusel extends StatefulWidget {
   final List<Repuesto> productos;
   final void Function(Repuesto) onReservar;
-  const HeroCarrusel({super.key, required this.productos, required this.onReservar});
+  final double alto;
+  const HeroCarrusel(
+      {super.key, required this.productos, required this.onReservar, this.alto = 300});
 
   @override
   State<HeroCarrusel> createState() => _HeroCarruselState();
@@ -215,12 +222,12 @@ class _HeroCarruselState extends State<HeroCarrusel> {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          height: 300,
+          height: widget.alto,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(22),
             border: Border.all(color: Colors.white12),
             boxShadow: const [
-              BoxShadow(color: Color(0x66000000), blurRadius: 30, offset: Offset(0, 14)),
+              BoxShadow(color: Color(0x66000000), blurRadius: 36, offset: Offset(0, 18)),
             ],
           ),
           clipBehavior: Clip.antiAlias,
@@ -230,6 +237,7 @@ class _HeroCarruselState extends State<HeroCarrusel> {
             itemCount: lista.length,
             itemBuilder: (_, i) => _Diapositiva(
               producto: lista[i],
+              grande: widget.alto > 340,
               onReservar: () => widget.onReservar(lista[i]),
             ),
           ),
@@ -263,7 +271,9 @@ class _HeroCarruselState extends State<HeroCarrusel> {
 class _Diapositiva extends StatelessWidget {
   final Repuesto producto;
   final VoidCallback onReservar;
-  const _Diapositiva({required this.producto, required this.onReservar});
+  final bool grande;
+  const _Diapositiva(
+      {required this.producto, required this.onReservar, this.grande = false});
 
   @override
   Widget build(BuildContext context) {
@@ -277,7 +287,7 @@ class _Diapositiva extends StatelessWidget {
           colors: [Color(0xFF3A0D11), Color(0xFF1A1A1C)],
         ),
       ),
-      padding: const EdgeInsets.all(26),
+      padding: EdgeInsets.all(grande ? 36 : 26),
       child: Stack(
         children: [
           if (foto != null)
@@ -285,7 +295,7 @@ class _Diapositiva extends StatelessWidget {
               right: -26,
               top: -26,
               bottom: -26,
-              width: 260,
+              width: grande ? 460 : 260,
               child: ShaderMask(
                 shaderCallback: (r) => const LinearGradient(
                   begin: Alignment.centerLeft,
@@ -326,21 +336,27 @@ class _Diapositiva extends StatelessWidget {
               Text(producto.nombre,
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                       color: Colors.white,
-                      fontSize: 22,
+                      fontSize: grande ? 32 : 22,
                       fontWeight: FontWeight.w800,
                       height: 1.2)),
               const SizedBox(height: 6),
               Text(
                 [producto.marca, producto.modelo].where((e) => e.isNotEmpty).join(' · '),
-                style: const TextStyle(color: Colors.white70, fontSize: 13),
+                style: TextStyle(color: Colors.white70, fontSize: grande ? 16 : 13),
               ),
               const SizedBox(height: 16),
               Row(
                 children: [
                   ElevatedButton.icon(
                     onPressed: producto.stock > 0 ? onReservar : null,
+                    style: grande
+                        ? ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 18),
+                            textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+                          )
+                        : null,
                     icon: const Icon(Icons.event_available, size: 18),
                     label: const Text('Agregar a reserva'),
                   ),

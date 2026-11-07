@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../config.dart';
 
 /// Ancho máximo del contenido para que no se estire en pantallas grandes.
-const double kAnchoMaximo = 1200;
+const double kAnchoMaximo = 1480;
 
 /// Centra el contenido y limita su ancho.
 class Centrado extends StatelessWidget {
@@ -73,23 +73,83 @@ class TituloSeccion extends StatelessWidget {
             style: TextStyle(
                 color: oscuro ? AppColors.yellow : AppColors.red,
                 fontWeight: FontWeight.w800,
-                fontSize: 12,
-                letterSpacing: 1.6)),
+                fontSize: 13,
+                letterSpacing: 1.8)),
         const SizedBox(height: 8),
         Text(titulo,
             style: TextStyle(
-                fontSize: 30,
+                fontSize: 38,
                 height: 1.15,
                 fontWeight: FontWeight.w900,
                 color: oscuro ? Colors.white : AppColors.char)),
-        const SizedBox(height: 12),
+        const SizedBox(height: 14),
         Container(
-          width: 56,
-          height: 4,
+          width: 76,
+          height: 5,
           decoration: BoxDecoration(
               color: AppColors.red, borderRadius: BorderRadius.circular(4)),
         ),
       ],
+    );
+  }
+}
+
+/// Enlace del menú superior: ícono + texto, con subrayado rojo animado al pasar el mouse.
+class EnlaceNav extends StatefulWidget {
+  final String texto;
+  final IconData icono;
+  final VoidCallback onTap;
+  const EnlaceNav(this.texto, this.icono, this.onTap, {super.key});
+
+  @override
+  State<EnlaceNav> createState() => _EnlaceNavState();
+}
+
+class _EnlaceNavState extends State<EnlaceNav> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          margin: const EdgeInsets.symmetric(horizontal: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: _hover ? Colors.white.withValues(alpha: 0.08) : Colors.transparent,
+            borderRadius: BorderRadius.circular(30),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(widget.icono, size: 18, color: _hover ? AppColors.red : Colors.white54),
+                const SizedBox(width: 8),
+                Text(widget.texto,
+                    style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: _hover ? Colors.white : Colors.white70)),
+              ]),
+              const SizedBox(height: 4),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOut,
+                height: 3,
+                width: _hover ? 34 : 0,
+                decoration: BoxDecoration(
+                    color: AppColors.red, borderRadius: BorderRadius.circular(3)),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

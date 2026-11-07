@@ -4,6 +4,7 @@ import 'package:flutter/scheduler.dart';
 import '../config.dart';
 import '../models.dart';
 import 'efectos.dart';
+import 'portada_extra.dart';
 
 // ---------------------------------------------------------------------------
 // Fotos referenciales por tipo de repuesto
@@ -51,10 +52,11 @@ String? imagenReferencial(String categoria, String nombre) {
 
 /// Foto a mostrar para un repuesto: la propia (si ya la subieron) o una referencial.
 ImageProvider? fotoDe(Repuesto p) {
+  // Se decodifican reducidas (600 px) para que las listas largas no pesen ni se traben.
   final propia = p.imagenAbsoluta;
-  if (propia != null) return NetworkImage(propia);
+  if (propia != null) return ResizeImage.resizeIfNeeded(600, null, NetworkImage(propia));
   final ref = imagenReferencial(p.categoria, p.nombre);
-  return ref == null ? null : AssetImage(ref);
+  return ref == null ? null : ResizeImage.resizeIfNeeded(600, null, AssetImage(ref));
 }
 
 bool esFotoReferencial(Repuesto p) =>
@@ -345,6 +347,15 @@ class TarjetaMarca extends StatelessWidget {
 // Tarjeta de categoría con foto
 // ---------------------------------------------------------------------------
 
+const List<List<Color>> _paleta = [
+  [Color(0xFFC0392B), Color(0xFF6A1B14)],
+  [Color(0xFF2B6CB0), Color(0xFF14315A)],
+  [Color(0xFF1E8E78), Color(0xFF0B3D34)],
+  [Color(0xFFD98A0B), Color(0xFF6B3E04)],
+  [Color(0xFF7B4BB5), Color(0xFF331B58)],
+  [Color(0xFF4F6D7A), Color(0xFF1B2A31)],
+];
+
 class TarjetaCategoria extends StatelessWidget {
   final String nombre;
   final int total;
@@ -375,22 +386,26 @@ class TarjetaCategoria extends StatelessWidget {
                   scale: hover ? 1.1 : 1,
                   duration: const Duration(milliseconds: 450),
                   curve: Curves.easeOut,
-                  child: Image.asset(foto, fit: BoxFit.cover),
+                  child: Image.asset(foto, fit: BoxFit.cover, cacheWidth: 700),
                 )
               else
                 Container(
-                  decoration: const BoxDecoration(
+                  decoration: BoxDecoration(
                     gradient: LinearGradient(
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
-                        colors: [Color(0xFF4A0F14), AppColors.char]),
+                        colors: _paleta[nombre.hashCode.abs() % _paleta.length]),
                   ),
                   child: Align(
                     alignment: Alignment.topRight,
                     child: Padding(
                       padding: const EdgeInsets.all(14),
-                      child: Icon(iconoCategoria(nombre),
-                          size: 64, color: Colors.white.withValues(alpha: 0.12)),
+                      child: AnimatedScale(
+                        scale: hover ? 1.15 : 1,
+                        duration: const Duration(milliseconds: 300),
+                        child: Icon(iconoCategoria(nombre),
+                            size: 84, color: Colors.white.withValues(alpha: 0.28)),
+                      ),
                     ),
                   ),
                 ),
@@ -486,26 +501,22 @@ class TarjetaInfo extends StatelessWidget {
                 offset: const Offset(0, 10)),
           ],
         ),
-        child: Column(
+        child: Stack(
+          clipBehavior: Clip.hardEdge,
+          children: [
+            Positioned(
+              right: -18,
+              bottom: -22,
+              child: Icon(icono, size: 130, color: AppColors.red.withValues(alpha: hover ? 0.10 : 0.05)),
+            ),
+            Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                    colors: [AppColors.red, AppColors.redDark],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight),
-                borderRadius: BorderRadius.circular(18),
-                boxShadow: [
-                  BoxShadow(
-                      color: AppColors.red.withValues(alpha: hover ? 0.4 : 0.2),
-                      blurRadius: hover ? 18 : 10,
-                      offset: const Offset(0, 6)),
-                ],
-              ),
-              child: Icon(icono, color: Colors.white, size: 32),
+            AnimatedScale(
+              scale: hover ? 1.08 : 1,
+              duration: const Duration(milliseconds: 220),
+              child: InsigniaIcono(icono: icono, tam: 72),
             ),
             const SizedBox(height: 22),
             Text(titulo,
@@ -526,6 +537,8 @@ class TarjetaInfo extends StatelessWidget {
                 child: const Icon(Icons.arrow_forward, size: 18, color: AppColors.red),
               ),
             ]),
+          ],
+        ),
           ],
         ),
       ),
@@ -554,40 +567,57 @@ class PasoReserva extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       clipBehavior: Clip.antiAlias,
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(34),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white12),
+        gradient: LinearGradient(
+          colors: [Colors.white.withValues(alpha: 0.10), Colors.white.withValues(alpha: 0.03)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: Colors.white24),
       ),
       child: Stack(
         children: [
           Positioned(
             right: -4,
-            top: -18,
+            top: -26,
             child: Text('$numero',
                 style: TextStyle(
-                    fontSize: 110,
+                    fontSize: 150,
                     fontWeight: FontWeight.w900,
-                    color: Colors.white.withValues(alpha: 0.06),
+                    color: Colors.white.withValues(alpha: 0.07),
                     height: 1)),
           ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration:
-                    BoxDecoration(color: AppColors.red, borderRadius: BorderRadius.circular(14)),
-                child: Icon(icono, color: Colors.white, size: 26),
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  InsigniaIcono(icono: icono, tam: 76),
+                  Positioned(
+                    right: -6,
+                    top: -6,
+                    child: Container(
+                      width: 30,
+                      height: 30,
+                      alignment: Alignment.center,
+                      decoration: const BoxDecoration(color: Color(0xFFFFC145), shape: BoxShape.circle),
+                      child: Text('$numero',
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w900, color: AppColors.char, fontSize: 15)),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 22),
               Text(titulo,
                   style: const TextStyle(
-                      color: Colors.white, fontSize: 19, fontWeight: FontWeight.w900)),
-              const SizedBox(height: 6),
+                      color: Colors.white, fontSize: 23, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 10),
               Text(texto,
-                  style: const TextStyle(color: Colors.white70, fontSize: 14, height: 1.5)),
+                  style: const TextStyle(color: Colors.white70, fontSize: 16, height: 1.55)),
             ],
           ),
         ],

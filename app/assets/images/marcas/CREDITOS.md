@@ -9,3 +9,5 @@ vende la sucursal.
 Para agregar una marca: copiar su PNG aquí con el nombre del slug del dataset y
 añadir la línea correspondiente en `_logosMarca` de `app/lib/widgets/diseno.dart`.
 Las marcas sin logo (ZNA, KYC, DFSK, Universal, etc.) se muestran con una inicial.
+
+Los íconos de WhatsApp, Gmail y Google Maps (app/assets/images/iconos) son de [Simple Icons](https://simpleicons.org) (licencia CC0); las marcas pertenecen a sus titulares.

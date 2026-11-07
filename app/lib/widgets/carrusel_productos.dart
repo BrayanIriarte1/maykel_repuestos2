@@ -128,7 +128,9 @@ class SeccionCarrusel extends StatelessWidget {
   final List<Repuesto> productos;
   final void Function(Repuesto) onReservar;
   final bool oscuro;
+  final bool rojo;
   final Widget? lateral;
+  final Widget? accion;
 
   const SeccionCarrusel({
     super.key,
@@ -137,39 +139,91 @@ class SeccionCarrusel extends StatelessWidget {
     required this.productos,
     required this.onReservar,
     this.oscuro = false,
+    this.rojo = false,
     this.lateral,
+    this.accion,
   });
 
   @override
   Widget build(BuildContext context) {
     if (productos.isEmpty) return const SizedBox.shrink();
     final esAngosto = MediaQuery.of(context).size.width < 760;
+    final sobreOscuro = oscuro || rojo;
+    final fondo = rojo
+        ? const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF8E1520), Color(0xFF4A0C12), Color(0xFF1F0608)])
+        : oscuro
+            ? const LinearGradient(colors: [AppColors.char, AppColors.char])
+            : const LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Colors.white, AppColors.paper]);
+    final cabecera = Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Expanded(child: TituloSeccion(kicker: kicker, titulo: titulo, oscuro: sobreOscuro)),
+        if (accion != null && !esAngosto) accion!,
+      ],
+    );
     return Container(
       width: double.infinity,
-      color: oscuro ? AppColors.char : AppColors.paper,
-      padding: EdgeInsets.symmetric(
-          horizontal: esAngosto ? 28 : 60, vertical: esAngosto ? 36 : 84),
-      child: Centrado(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            TituloSeccion(kicker: kicker, titulo: titulo, oscuro: oscuro),
-            const SizedBox(height: 36),
-            if (lateral == null)
-              CarruselProductos(productos: productos, onReservar: onReservar)
-            else
-              Row(
+      clipBehavior: Clip.hardEdge,
+      decoration: BoxDecoration(gradient: fondo),
+      child: Stack(
+        children: [
+          Positioned(
+            right: -140,
+            top: -140,
+            child: Container(
+              width: 420,
+              height: 420,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: (sobreOscuro ? Colors.white : AppColors.red).withValues(alpha: sobreOscuro ? 0.05 : 0.06),
+              ),
+            ),
+          ),
+          Positioned(
+            left: -100,
+            bottom: -160,
+            child: Container(
+              width: 340,
+              height: 340,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: (sobreOscuro ? Colors.black : AppColors.red).withValues(alpha: sobreOscuro ? 0.18 : 0.04),
+              ),
+            ),
+          ),
+          Padding(
+            padding: EdgeInsets.symmetric(
+                horizontal: esAngosto ? 28 : 60, vertical: esAngosto ? 36 : 84),
+            child: Centrado(
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SizedBox(width: 300, child: lateral),
-                  const SizedBox(width: 32),
-                  Expanded(
-                    child: CarruselProductos(productos: productos, onReservar: onReservar),
-                  ),
+                  cabecera,
+                  const SizedBox(height: 40),
+                  if (lateral == null)
+                    CarruselProductos(productos: productos, onReservar: onReservar)
+                  else
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(width: 340, child: lateral),
+                        const SizedBox(width: 36),
+                        Expanded(
+                          child: CarruselProductos(productos: productos, onReservar: onReservar),
+                        ),
+                      ],
+                    ),
                 ],
               ),
-          ],
-        ),
+            ),
+          ),
+        ],
       ),
     );
   }

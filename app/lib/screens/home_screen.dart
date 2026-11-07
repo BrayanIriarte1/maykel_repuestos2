@@ -12,6 +12,7 @@ import '../widgets/carrusel_productos.dart';
 import '../widgets/diseno.dart';
 import '../widgets/efectos.dart';
 import '../widgets/mapa_ubicacion.dart';
+import '../widgets/portada_extra.dart';
 import '../widgets/product_card.dart';
 import '../widgets/reserva_dialog.dart';
 import 'aviso_legal_screen.dart';
@@ -41,9 +42,8 @@ class _HomeScreenState extends State<HomeScreen> {
   int _totalGeneral = 0;
   int _pagina = 1;
   bool _cargandoCat = false;
-  bool _cargandoMas = false;
   String? _errorCat;
-  static const _porPagina = 24;
+  static const _porPagina = 12;
 
   String _busqueda = '';
   String? _marca;
@@ -97,7 +97,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// Vuelve a pedir lo que se está viendo, sin spinners ni perder la posición.
   Future<void> _refrescarSilencioso({bool avisar = false}) async {
-    if (_refrescando || _cargandoCat || _cargandoMas) return;
+    if (_refrescando || _cargandoCat) return;
     setState(() => _refrescando = true);
     try {
       final estado = await ApiService.instance.getEstadoInventario();
@@ -107,8 +107,8 @@ class _HomeScreenState extends State<HomeScreen> {
         marca: _marca,
         modelo: _modelo,
         soloDisponibles: _soloDisponibles,
-        pagina: 1,
-        limite: (_pagina * _porPagina).clamp(_porPagina, 200),
+        pagina: _pagina,
+        limite: _porPagina,
       );
       final pool = await ApiService.instance.getRepuestosPagina(limite: 200, soloDisponibles: true);
       if (!mounted) return;
@@ -194,16 +194,13 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _buscarCatalogo({bool mas = false}) async {
-    if (mas) {
-      setState(() => _cargandoMas = true);
-    } else {
-      setState(() {
-        _cargandoCat = true;
-        _errorCat = null;
-        _pagina = 1;
-      });
-    }
+  /// Carga una página del catálogo (12 por página: la lista no crece sin límite).
+  Future<void> _buscarCatalogo({int pagina = 1, bool scroll = false}) async {
+    setState(() {
+      _cargandoCat = true;
+      _errorCat = null;
+      _pagina = pagina;
+    });
     try {
       final r = await ApiService.instance.getRepuestosPagina(
         buscar: _busqueda.trim(),
@@ -211,17 +208,12 @@ class _HomeScreenState extends State<HomeScreen> {
         marca: _marca,
         modelo: _modelo,
         soloDisponibles: _soloDisponibles,
-        pagina: mas ? _pagina + 1 : 1,
+        pagina: pagina,
         limite: _porPagina,
       );
       if (!mounted) return;
       setState(() {
-        if (mas) {
-          _pagina++;
-          _items = [..._items, ...r.items];
-        } else {
-          _items = r.items;
-        }
+        _items = r.items;
         _total = r.total;
         if (_busqueda.trim().isEmpty &&
             _marca == null &&
@@ -231,14 +223,13 @@ class _HomeScreenState extends State<HomeScreen> {
           _totalGeneral = r.total;
         }
         _cargandoCat = false;
-        _cargandoMas = false;
       });
+      if (scroll) _scrollA(_catalogoKey);
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _errorCat = e.toString();
         _cargandoCat = false;
-        _cargandoMas = false;
       });
     }
   }
@@ -393,7 +384,7 @@ class _HomeScreenState extends State<HomeScreen> {
       width: double.infinity,
       color: AppColors.paper,
       padding: EdgeInsets.symmetric(
-          horizontal: _padX(esAngosto), vertical: esAngosto ? 36 : 64),
+          horizontal: _padX(esAngosto), vertical: esAngosto ? 36 : 96),
       child: Centrado(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -402,10 +393,10 @@ class _HomeScreenState extends State<HomeScreen> {
               child: TituloSeccion(
                   kicker: 'Todo para tu vehículo', titulo: 'Explora por categoría'),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 40),
             LayoutBuilder(builder: (context, c) {
-              final cols = esAngosto ? 2 : (c.maxWidth / 270).floor().clamp(2, 4);
-              const gap = 16.0;
+              final cols = esAngosto ? 2 : (c.maxWidth / 300).floor().clamp(2, 4);
+              const gap = 22.0;
               final w = (c.maxWidth - gap * (cols - 1)) / cols;
               return Wrap(
                 spacing: gap,
@@ -419,7 +410,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         child: TarjetaCategoria(
                           nombre: cats[i].$1,
                           total: cats[i].$2,
-                          alto: esAngosto ? 130 : 170,
+                          alto: esAngosto ? 140 : 210,
                           onTap: () => _irACategoria(cats[i].$1),
                         ),
                       ),
@@ -469,23 +460,126 @@ class _HomeScreenState extends State<HomeScreen> {
     return Container(
       width: double.infinity,
       color: AppColors.paper,
-      padding: EdgeInsets.fromLTRB(_padX(esAngosto), esAngosto ? 28 : 64, _padX(esAngosto), esAngosto ? 12 : 40),
+      padding: EdgeInsets.fromLTRB(_padX(esAngosto), esAngosto ? 28 : 64, _padX(esAngosto), esAngosto ? 28 : 72),
       child: Centrado(
-        child: LayoutBuilder(builder: (context, c) {
-          final cols = esAngosto ? 1 : (c.maxWidth >= 1000 ? 4 : 2);
-          const gap = 24.0;
-          final w = (c.maxWidth - gap * (cols - 1)) / cols;
-          return Wrap(
-            spacing: gap,
-            runSpacing: gap,
-            children: [
-              for (var i = 0; i < tarjetas.length; i++)
-                SizedBox(width: w, child: Revelar(retrasoMs: i * 110, child: tarjetas[i])),
-            ],
-          );
-        }),
+        child: Column(children: [
+          LayoutBuilder(builder: (context, c) {
+            final cols = esAngosto ? 1 : (c.maxWidth >= 1000 ? 4 : 2);
+            const gap = 24.0;
+            final w = (c.maxWidth - gap * (cols - 1)) / cols;
+            return Wrap(
+              spacing: gap,
+              runSpacing: gap,
+              children: [
+                for (var i = 0; i < tarjetas.length; i++)
+                  SizedBox(width: w, child: Revelar(retrasoMs: i * 110, child: tarjetas[i])),
+              ],
+            );
+          }),
+          SizedBox(height: esAngosto ? 28 : 56),
+          Revelar(child: _bandaConfianza(esAngosto)),
+        ]),
       ),
     );
+  }
+
+  /// Cifras de la tienda (animadas) y un llamado directo a WhatsApp.
+  Widget _bandaConfianza(bool esAngosto) {
+    final anios = (DateTime.now().year - 2015).clamp(1, 99);
+    final cifras = <(IconData, int, String, String)>[
+      (Icons.calendar_month_outlined, anios, '', 'años atendiendo Calama'),
+      (Icons.inventory_2_outlined, _totalGeneral > 0 ? _totalGeneral : _productos.length, '', 'repuestos en catálogo'),
+      (Icons.directions_car_outlined, _marcas.isNotEmpty ? _marcas.length : 30, '+', 'marcas chinas y más'),
+      (Icons.bolt_outlined, 30, ' min', 'sincronización de stock'),
+    ];
+    final tarjeta = Container(
+      padding: EdgeInsets.all(esAngosto ? 20 : 32),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: AppColors.paper2),
+        boxShadow: const [BoxShadow(color: Color(0x14000000), blurRadius: 24, offset: Offset(0, 10))],
+      ),
+      child: Wrap(
+        alignment: WrapAlignment.spaceEvenly,
+        runSpacing: 22,
+        spacing: 28,
+        children: [
+          for (final c in cifras)
+            SizedBox(
+              width: esAngosto ? 150 : 250,
+              child: Row(children: [
+                InsigniaIcono(icono: c.$1, tam: esAngosto ? 46 : 58),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    ContadorAnimado(
+                        valor: c.$2,
+                        sufijo: c.$3,
+                        estilo: TextStyle(
+                            fontSize: esAngosto ? 26 : 34,
+                            fontWeight: FontWeight.w900,
+                            color: AppColors.char,
+                            height: 1.1)),
+                    Text(c.$4,
+                        style: const TextStyle(color: AppColors.steel, fontSize: 13.5, height: 1.3)),
+                  ]),
+                ),
+              ]),
+            ),
+        ],
+      ),
+    );
+    final wa = Container(
+      padding: EdgeInsets.symmetric(horizontal: esAngosto ? 22 : 40, vertical: esAngosto ? 24 : 30),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+            colors: [Color(0xFF0E6B3A), Color(0xFF25D366)],
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight),
+        borderRadius: BorderRadius.circular(26),
+        boxShadow: [BoxShadow(color: const Color(0xFF25D366).withValues(alpha: 0.35), blurRadius: 28, offset: const Offset(0, 12))],
+      ),
+      child: Flex(
+        direction: esAngosto ? Axis.vertical : Axis.horizontal,
+        crossAxisAlignment: esAngosto ? CrossAxisAlignment.start : CrossAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+            child: const LogoWhatsapp(size: 54),
+          ),
+          SizedBox(width: esAngosto ? 0 : 24, height: esAngosto ? 14 : 0),
+          Flexible(
+            flex: esAngosto ? 0 : 1,
+            child: const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('¿No encuentras tu repuesto?',
+                    style: TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900)),
+                SizedBox(height: 4),
+                Text('Cuéntanos marca, modelo y año por WhatsApp y lo buscamos por ti.',
+                    style: TextStyle(color: Colors.white, fontSize: 16, height: 1.4)),
+              ],
+            ),
+          ),
+          SizedBox(width: esAngosto ? 0 : 24, height: esAngosto ? 16 : 0),
+          ElevatedButton.icon(
+            onPressed: _solicitarReservaEspecial,
+            icon: const Icon(Icons.send_rounded, size: 18),
+            label: const Text('Escribir por WhatsApp'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: const Color(0xFF0E6B3A),
+              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 20),
+              textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(34)),
+            ),
+          ),
+        ],
+      ),
+    );
+    return Column(children: [tarjeta, const SizedBox(height: 22), wa]);
   }
 
   /// Cinta animada bajo el hero con datos reales del inventario y de la tienda.
@@ -534,7 +628,7 @@ class _HomeScreenState extends State<HomeScreen> {
             colors: [Color(0xFF1A1A1C), Color(0xFF2B1013)]),
       ),
       padding: EdgeInsets.symmetric(
-          horizontal: _padX(esAngosto), vertical: esAngosto ? 40 : 70),
+          horizontal: _padX(esAngosto), vertical: esAngosto ? 40 : 100),
       child: Centrado(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -543,10 +637,10 @@ class _HomeScreenState extends State<HomeScreen> {
               child: TituloSeccion(
                   kicker: 'Así de simple', titulo: 'Reserva en 3 pasos', oscuro: true),
             ),
-            const SizedBox(height: 28),
+            const SizedBox(height: 44),
             LayoutBuilder(builder: (context, c) {
               final cols = esAngosto ? 1 : 3;
-              const gap = 18.0;
+              const gap = 28.0;
               final w = (c.maxWidth - gap * (cols - 1)) / cols;
               return Wrap(
                 spacing: gap,
@@ -577,36 +671,52 @@ class _HomeScreenState extends State<HomeScreen> {
   /// Panel lateral de "Últimas unidades": urgencia + acceso al catálogo.
   Widget _panelUltimas() {
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(30),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [AppColors.red, Color(0xFF7A1A22)]),
-        borderRadius: BorderRadius.circular(20),
+            colors: [Color(0xFFFFC145), Color(0xFFFF8A00)]),
+        borderRadius: BorderRadius.circular(26),
+        boxShadow: [BoxShadow(color: const Color(0xFFFF8A00).withValues(alpha: 0.4), blurRadius: 30, offset: const Offset(0, 14))],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
+      child: Stack(
+        clipBehavior: Clip.hardEdge,
         children: [
-          const Icon(Icons.local_fire_department, color: AppColors.yellow, size: 40),
-          const SizedBox(height: 12),
-          const Text('¡Quedan pocas!',
-              style: TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900)),
-          const SizedBox(height: 8),
-          const Text(
-              'Reserva online tu repuesto y retíralo en tienda antes de que se agote.',
-              style: TextStyle(color: Colors.white70, height: 1.5)),
-          const SizedBox(height: 20),
-          ElevatedButton(
-            onPressed: () => _scrollA(_catalogoKey),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.yellow,
-              foregroundColor: AppColors.char,
-              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-            ),
-            child: const Text('Ver catálogo completo'),
+          Positioned(
+            right: -30,
+            bottom: -34,
+            child: Icon(Icons.local_fire_department, size: 190, color: Colors.white.withValues(alpha: 0.22)),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const InsigniaIcono(
+                  icono: Icons.local_fire_department,
+                  tam: 70,
+                  colores: [Color(0xFFD91E2B), Color(0xFF8E1520)]),
+              const SizedBox(height: 18),
+              const Text('¡Quedan pocas!',
+                  style: TextStyle(color: AppColors.char, fontSize: 32, fontWeight: FontWeight.w900, height: 1.1)),
+              const SizedBox(height: 10),
+              const Text(
+                  'Son las últimas unidades en bodega. Reserva online tu repuesto y retíralo en tienda antes de que se agote.',
+                  style: TextStyle(color: Color(0xFF3A2A00), fontSize: 16, height: 1.5, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: () => _scrollA(_catalogoKey),
+                icon: const Icon(Icons.arrow_forward, size: 18),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.char,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 18),
+                  textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                ),
+                label: const Text('Ver catálogo completo'),
+              ),
+            ],
           ),
         ],
       ),
@@ -725,10 +835,13 @@ class _HomeScreenState extends State<HomeScreen> {
             heroTag: 'wa',
             onPressed: () =>
                 launchUrl(Uri.parse('https://wa.me/${SiteContent.actual.contactoWhatsapp}')),
-            backgroundColor: const Color(0xFF25D366),
-            foregroundColor: Colors.white,
-            icon: const Icon(Icons.chat_bubble_outline),
-            label: esAngosto ? const SizedBox.shrink() : const Text('Escríbenos'),
+            backgroundColor: Colors.white,
+            foregroundColor: const Color(0xFF128C4A),
+            elevation: 6,
+            icon: const LogoWhatsapp(size: 34),
+            label: esAngosto
+                ? const SizedBox.shrink()
+                : const Text('Escríbenos', style: TextStyle(fontWeight: FontWeight.w800)),
           ),
         ],
       ),
@@ -750,6 +863,18 @@ class _HomeScreenState extends State<HomeScreen> {
                         titulo: 'Productos destacados',
                         productos: _destacados,
                         onReservar: _abrirReserva,
+                        accion: OutlinedButton.icon(
+                          onPressed: () => _scrollA(_catalogoKey),
+                          icon: const Icon(Icons.grid_view_rounded, size: 18),
+                          label: const Text('Ver todo el catálogo'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.red,
+                            side: const BorderSide(color: AppColors.red, width: 1.6),
+                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+                            textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                          ),
+                        ),
                       ),
                     ),
                   _buildMarcasRapidas(esAngosto),
@@ -762,7 +887,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         titulo: 'Últimas unidades',
                         productos: _ultimas,
                         onReservar: _abrirReserva,
-                        oscuro: true,
+                        rojo: true,
                         lateral: esAngosto ? null : _panelUltimas(),
                       ),
                     ),
@@ -814,7 +939,12 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ),
-          const Spacer(),
+          const SizedBox(width: 24),
+          if (!esAngosto && MediaQuery.of(context).size.width >= 1500)
+            const Expanded(child: HorarioMarquesina())
+          else
+            const Spacer(),
+          const SizedBox(width: 12),
           if (!esAngosto) ...[
             EnlaceNav('Historia', Icons.history_edu_outlined, () => _scrollA(_historiaKey)),
             EnlaceNav('Marcas', Icons.directions_car_outlined, () => _scrollA(_marcasKey)),
@@ -1030,7 +1160,31 @@ class _HomeScreenState extends State<HomeScreen> {
       color: Colors.white,
       padding: EdgeInsets.symmetric(
           horizontal: _padX(esAngosto), vertical: esAngosto ? 40 : 100),
-      child: Centrado(
+      child: Stack(
+        clipBehavior: Clip.hardEdge,
+        children: [
+          if (!esAngosto)
+            Positioned(
+              left: -20,
+              bottom: -60,
+              child: Text('${DateTime.now().year - 2015}',
+                  style: TextStyle(
+                      fontSize: 420,
+                      height: 1,
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.red.withValues(alpha: 0.035))),
+            ),
+          Positioned(
+            right: -120,
+            top: -120,
+            child: Container(
+              width: 380,
+              height: 380,
+              decoration: BoxDecoration(
+                  shape: BoxShape.circle, color: AppColors.red.withValues(alpha: 0.06)),
+            ),
+          ),
+          Centrado(
         child: Flex(
           direction: esAngosto ? Axis.vertical : Axis.horizontal,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1049,6 +1203,16 @@ class _HomeScreenState extends State<HomeScreen> {
                     style: TextStyle(
                         color: AppColors.steel, fontSize: esAngosto ? 15 : 18, height: 1.8),
                   ),
+                  const SizedBox(height: 36),
+                  Wrap(
+                    spacing: 16,
+                    runSpacing: 16,
+                    children: [
+                      _chipHistoria(Icons.verified_outlined, 'Desde 2015', 'en Calama'),
+                      _chipHistoria(Icons.directions_car_outlined, 'Marcas chinas', 'y de faena minera'),
+                      _chipHistoria(Icons.handshake_outlined, 'Atención técnica', 'personalizada'),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -1066,6 +1230,29 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
       ),
+        ],
+      ),
+    );
+  }
+
+  Widget _chipHistoria(IconData icono, String titulo, String sub) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 10, 22, 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(40),
+        border: Border.all(color: AppColors.paper2),
+        boxShadow: const [BoxShadow(color: Color(0x12000000), blurRadius: 14, offset: Offset(0, 6))],
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        InsigniaIcono(icono: icono, tam: 46),
+        const SizedBox(width: 12),
+        Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+          Text(titulo,
+              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: AppColors.char)),
+          Text(sub, style: const TextStyle(fontSize: 12.5, color: AppColors.steel)),
+        ]),
+      ]),
     );
   }
 
@@ -1091,10 +1278,13 @@ class _HomeScreenState extends State<HomeScreen> {
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: hover ? AppColors.red : AppColors.red.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(14),
+                gradient: LinearGradient(
+                    colors: hover
+                        ? const [AppColors.red, AppColors.redDark]
+                        : [AppColors.red.withValues(alpha: 0.14), AppColors.red.withValues(alpha: 0.06)]),
+                borderRadius: BorderRadius.circular(18),
               ),
-              child: Icon(icono, color: hover ? Colors.white : AppColors.red, size: 28),
+              child: Icon(icono, color: hover ? Colors.white : AppColors.red, size: 30),
             ),
             const SizedBox(width: 20),
             Expanded(
@@ -1140,7 +1330,7 @@ class _HomeScreenState extends State<HomeScreen> {
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0xFF1A1A1C), Color(0xFF242427)],
+          colors: [Color(0xFF0F1B33), Color(0xFF1B2F55)],
         ),
       ),
       padding: EdgeInsets.symmetric(
@@ -1166,53 +1356,81 @@ class _HomeScreenState extends State<HomeScreen> {
                     SizedBox(
                       width: w,
                       child: HoverLift(
+                        onTap: () => launchUrl(
+                            Uri.parse('https://wa.me/${SiteContent.actual.contactoWhatsapp}?text=${Uri.encodeComponent('Hola, quiero consultar por: ${servicios[i].titulo}')}'),
+                            mode: LaunchMode.externalApplication),
                         builder: (context, hover) => AnimatedContainer(
                           duration: const Duration(milliseconds: 220),
-                          height: esAngosto ? 210 : 260,
-                          padding: const EdgeInsets.all(28),
+                          height: esAngosto ? 270 : 340,
+                          padding: const EdgeInsets.all(30),
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                               colors: hover
-                                  ? const [Color(0xFF3A1317), Color(0xFF2A2A2E)]
-                                  : const [AppColors.char2, AppColors.char2],
+                                  ? const [Color(0xFF2A4A8A), Color(0xFF1B2F55)]
+                                  : const [Color(0xFF1F3560), Color(0xFF16264A)],
                             ),
-                            borderRadius: BorderRadius.circular(22),
+                            borderRadius: BorderRadius.circular(24),
                             border: Border.all(
-                                color: hover ? AppColors.red : Colors.white12, width: 1.5),
+                                color: hover ? const Color(0xFFFFC145) : Colors.white24, width: 1.6),
                             boxShadow: [
                               BoxShadow(
-                                  color: AppColors.red.withValues(alpha: hover ? 0.25 : 0),
-                                  blurRadius: 28,
+                                  color: const Color(0xFFFFC145).withValues(alpha: hover ? 0.28 : 0),
+                                  blurRadius: 30,
                                   offset: const Offset(0, 12)),
                             ],
                           ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                          child: Stack(
+                            clipBehavior: Clip.hardEdge,
                             children: [
-                              AnimatedContainer(
-                                duration: const Duration(milliseconds: 220),
-                                padding: const EdgeInsets.all(15),
-                                decoration: BoxDecoration(
-                                  color: AppColors.red,
-                                  borderRadius: BorderRadius.circular(hover ? 28 : 16),
-                                ),
-                                child: Icon(_iconosServicio[i % _iconosServicio.length],
-                                    color: Colors.white, size: 30),
+                              Positioned(
+                                right: -6,
+                                top: -22,
+                                child: Text('0${i + 1}',
+                                    style: TextStyle(
+                                        fontSize: 100,
+                                        fontWeight: FontWeight.w900,
+                                        height: 1,
+                                        color: Colors.white.withValues(alpha: 0.07))),
                               ),
-                              const SizedBox(height: 20),
-                              Text(servicios[i].titulo,
-                                  style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: 19)),
-                              const SizedBox(height: 8),
-                              Expanded(
-                                child: Text(servicios[i].descripcion,
-                                    overflow: TextOverflow.fade,
-                                    style: const TextStyle(
-                                        color: Colors.white70, fontSize: 15, height: 1.55)),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  AnimatedScale(
+                                    scale: hover ? 1.1 : 1,
+                                    duration: const Duration(milliseconds: 220),
+                                    child: InsigniaIcono(
+                                      icono: _iconosServicio[i % _iconosServicio.length],
+                                      tam: 68,
+                                      colores: const [Color(0xFFFFC145), Color(0xFFFF8A00)],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 20),
+                                  Text(servicios[i].titulo,
+                                      style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 20)),
+                                  const SizedBox(height: 8),
+                                  Expanded(
+                                    child: Text(servicios[i].descripcion,
+                                        overflow: TextOverflow.fade,
+                                        style: const TextStyle(
+                                            color: Colors.white70, fontSize: 15.5, height: 1.55)),
+                                  ),
+                                  Row(children: [
+                                    Text('Consultar',
+                                        style: TextStyle(
+                                            color: hover ? const Color(0xFFFFC145) : Colors.white60,
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 14)),
+                                    const SizedBox(width: 6),
+                                    Icon(Icons.arrow_forward,
+                                        size: 16,
+                                        color: hover ? const Color(0xFFFFC145) : Colors.white60),
+                                  ]),
+                                ],
                               ),
                             ],
                           ),
@@ -1231,11 +1449,19 @@ class _HomeScreenState extends State<HomeScreen> {
   // ---------- Catálogo ----------
 
   Widget _buildCatalogo(bool esAngosto) {
+    final totalPaginas = (_total / _porPagina).ceil().clamp(1, 9999);
+    final desde = _total == 0 ? 0 : (_pagina - 1) * _porPagina + 1;
+    final hasta = ((_pagina - 1) * _porPagina + _items.length).clamp(0, _total);
     return Container(
       width: double.infinity,
-      color: AppColors.paper,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [AppColors.paper, Color(0xFFE9E3D6)]),
+      ),
       padding: EdgeInsets.symmetric(
-          horizontal: _padX(esAngosto), vertical: esAngosto ? 40 : 70),
+          horizontal: _padX(esAngosto), vertical: esAngosto ? 40 : 90),
       child: Centrado(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1243,64 +1469,32 @@ class _HomeScreenState extends State<HomeScreen> {
             TituloSeccion(
                 kicker: SiteContent.actual.catalogoKicker,
                 titulo: SiteContent.actual.catalogoTitulo),
+            const SizedBox(height: 32),
+            _buildPanelBusqueda(esAngosto),
             const SizedBox(height: 26),
-            Material(
-              elevation: 3,
-              shadowColor: Colors.black26,
-              borderRadius: BorderRadius.circular(30),
-              child: TextField(
-                controller: _busquedaCtrl,
-                decoration: InputDecoration(
-                  prefixIcon: const Icon(Icons.search, color: AppColors.red),
-                  hintText: SiteContent.actual.catalogoBusquedaHint,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 16),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(30),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-                onChanged: (v) {
-                  _busqueda = v;
-                  _debounce?.cancel();
-                  _debounce = Timer(const Duration(milliseconds: 350), _buscarCatalogo);
-                },
-              ),
-            ),
-            const SizedBox(height: 14),
             Wrap(
-              spacing: 8,
-              runSpacing: 8,
+              alignment: WrapAlignment.spaceBetween,
               crossAxisAlignment: WrapCrossAlignment.center,
+              runSpacing: 8,
+              spacing: 16,
               children: [
-                const Text('Búsquedas rápidas:',
-                    style: TextStyle(color: AppColors.steel, fontSize: 12.5)),
-                for (final s in const ['Filtro de aceite', 'Pastillas de freno', 'Bujías', 'Amortiguador', 'Batería', 'Correa'])
-                  ActionChip(
-                    label: Text(s, style: const TextStyle(fontSize: 12.5)),
-                    backgroundColor: Colors.white,
-                    side: const BorderSide(color: AppColors.paper2),
-                    onPressed: () {
-                      _busqueda = s;
-                      _busquedaCtrl.text = s;
-                      _buscarCatalogo();
-                    },
-                  ),
+                if (!_cargandoCat && _errorCat == null)
+                  Text(
+                      _total == 0
+                          ? 'Sin resultados'
+                          : 'Mostrando $desde–$hasta de $_total repuesto${_total == 1 ? '' : 's'}',
+                      style: const TextStyle(
+                          color: AppColors.char, fontSize: 16, fontWeight: FontWeight.w800))
+                else
+                  const SizedBox.shrink(),
+                _indicadorInventario(),
               ],
             ),
-            const SizedBox(height: 16),
-            _buildFiltros(),
-            const SizedBox(height: 14),
-            _indicadorInventario(),
-            if (!_cargandoCat && _errorCat == null) ...[
-              const SizedBox(height: 6),
-              Text('$_total producto${_total == 1 ? '' : 's'}',
-                  style: const TextStyle(color: AppColors.steel, fontSize: 12.5)),
-            ],
-            const SizedBox(height: 18),
+            const SizedBox(height: 20),
             if (_cargandoCat)
               const Center(
                   child: Padding(
-                padding: EdgeInsets.symmetric(vertical: 40),
+                padding: EdgeInsets.symmetric(vertical: 60),
                 child: CircularProgressIndicator(),
               ))
             else if (_errorCat != null)
@@ -1310,17 +1504,28 @@ class _HomeScreenState extends State<HomeScreen> {
                     style: const TextStyle(color: AppColors.bad)),
               )
             else if (_items.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 30),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 50, horizontal: 24),
+                decoration: BoxDecoration(
+                    color: Colors.white, borderRadius: BorderRadius.circular(22)),
                 child: Column(
                   children: [
+                    const InsigniaIcono(icono: Icons.search_off, tam: 72),
+                    const SizedBox(height: 18),
                     const Text('No existen repuestos disponibles para esta configuración.',
                         textAlign: TextAlign.center,
-                        style: TextStyle(color: AppColors.steel)),
-                    const SizedBox(height: 14),
-                    OutlinedButton.icon(
+                        style: TextStyle(color: AppColors.char, fontSize: 18, fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 16),
+                    ElevatedButton.icon(
                       onPressed: _solicitarReservaEspecial,
-                      icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                      icon: const LogoWhatsapp(size: 24),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF25D366),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 18),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                      ),
                       label: const Text('Solicitar reserva especial de este repuesto'),
                     ),
                   ],
@@ -1329,7 +1534,7 @@ class _HomeScreenState extends State<HomeScreen> {
             else ...[
               LayoutBuilder(builder: (context, c) {
                 final cols = esAngosto ? 1 : (c.maxWidth / 270).floor().clamp(2, 6);
-                const gap = 18.0;
+                const gap = 20.0;
                 final w = (c.maxWidth - gap * (cols - 1)) / cols;
                 return Wrap(
                   spacing: gap,
@@ -1346,25 +1551,17 @@ class _HomeScreenState extends State<HomeScreen> {
                       .toList(),
                 );
               }),
-              if (_items.length < _total) ...[
-                const SizedBox(height: 26),
+              const SizedBox(height: 40),
+              Paginador(
+                pagina: _pagina,
+                total: totalPaginas,
+                onPagina: (p) => _buscarCatalogo(pagina: p, scroll: true),
+              ),
+              if (totalPaginas > 1) ...[
+                const SizedBox(height: 10),
                 Center(
-                  child: OutlinedButton.icon(
-                    onPressed: _cargandoMas ? null : () => _buscarCatalogo(mas: true),
-                    icon: _cargandoMas
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Icon(Icons.expand_more),
-                    label: Text('Ver más (${_total - _items.length} restantes)'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.red,
-                      side: const BorderSide(color: AppColors.red),
-                      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-                    ),
-                  ),
+                  child: Text('Página $_pagina de $totalPaginas',
+                      style: const TextStyle(color: AppColors.steel, fontSize: 13)),
                 ),
               ],
             ],
@@ -1373,6 +1570,167 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
+
+  /// Panel de búsqueda: un solo bloque ordenado en 3 pasos (buscar, afinar, ver lo activo).
+  Widget _buildPanelBusqueda(bool esAngosto) {
+    final hayFiltros = _marca != null ||
+        _modelo != null ||
+        _categoria != null ||
+        _soloDisponibles ||
+        _busqueda.trim().isNotEmpty;
+    final populares = _categoriasConteo.take(10).toList();
+
+    Widget paso(int n, String texto) => Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Row(children: [
+            Container(
+              width: 24,
+              height: 24,
+              alignment: Alignment.center,
+              decoration: const BoxDecoration(color: AppColors.red, shape: BoxShape.circle),
+              child: Text('$n',
+                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w900)),
+            ),
+            const SizedBox(width: 10),
+            Text(texto,
+                style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.char, fontSize: 14.5)),
+          ]),
+        );
+
+    return Container(
+      padding: EdgeInsets.all(esAngosto ? 18 : 32),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(26),
+        boxShadow: const [BoxShadow(color: Color(0x1A000000), blurRadius: 30, offset: Offset(0, 14))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          paso(1, 'Busca por nombre, código OEM o SKU'),
+          TextField(
+            controller: _busquedaCtrl,
+            style: const TextStyle(fontSize: 17),
+            decoration: InputDecoration(
+              prefixIcon: const Icon(Icons.search, color: AppColors.red, size: 26),
+              suffixIcon: _busquedaCtrl.text.isEmpty
+                  ? null
+                  : IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () {
+                        _busquedaCtrl.clear();
+                        _busqueda = '';
+                        _buscarCatalogo();
+                      },
+                    ),
+              hintText: SiteContent.actual.catalogoBusquedaHint,
+              filled: true,
+              fillColor: AppColors.paper,
+              contentPadding: const EdgeInsets.symmetric(vertical: 20),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(40),
+                borderSide: BorderSide.none,
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(40),
+                borderSide: const BorderSide(color: AppColors.red, width: 2),
+              ),
+            ),
+            onChanged: (v) {
+              _busqueda = v;
+              _debounce?.cancel();
+              _debounce = Timer(const Duration(milliseconds: 350), _buscarCatalogo);
+              setState(() {});
+            },
+          ),
+          const SizedBox(height: 26),
+          paso(2, 'Afina por vehículo y categoría'),
+          if (populares.isNotEmpty) ...[
+            SizedBox(
+              height: 46,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: [
+                  for (final c in populares)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 10),
+                      child: ChoiceChip(
+                        avatar: Icon(iconoCategoria(c.$1),
+                            size: 18, color: _categoria == c.$1 ? Colors.white : AppColors.red),
+                        label: Text('${c.$1} · ${c.$2}'),
+                        selected: _categoria == c.$1,
+                        showCheckmark: false,
+                        selectedColor: AppColors.red,
+                        backgroundColor: AppColors.paper,
+                        side: BorderSide.none,
+                        labelStyle: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: _categoria == c.$1 ? Colors.white : AppColors.char),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                        onSelected: (v) => _filtrar(() => _categoria = v ? c.$1 : null),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+          _buildFiltros(esAngosto),
+          if (hayFiltros) ...[
+            const SizedBox(height: 22),
+            paso(3, 'Filtros activos'),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                if (_busqueda.trim().isNotEmpty)
+                  _chipActivo('Texto: "${_busqueda.trim()}"', () {
+                    _busquedaCtrl.clear();
+                    _busqueda = '';
+                    _buscarCatalogo();
+                  }),
+                if (_marca != null)
+                  _chipActivo(_marca!, () => _filtrar(() {
+                        _marca = null;
+                        _modelo = null;
+                        _modelos = [];
+                      }, recargarFiltros: true)),
+                if (_modelo != null) _chipActivo(_modelo!, () => _filtrar(() => _modelo = null)),
+                if (_categoria != null)
+                  _chipActivo(_categoria!, () => _filtrar(() => _categoria = null)),
+                if (_soloDisponibles)
+                  _chipActivo('Solo con stock', () => _filtrar(() => _soloDisponibles = false)),
+                TextButton.icon(
+                  onPressed: () {
+                    _busquedaCtrl.clear();
+                    _busqueda = '';
+                    _filtrar(() {
+                      _marca = null;
+                      _modelo = null;
+                      _categoria = null;
+                      _soloDisponibles = false;
+                      _modelos = [];
+                    }, recargarFiltros: true);
+                  },
+                  icon: const Icon(Icons.restart_alt, size: 18),
+                  label: const Text('Limpiar todo'),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _chipActivo(String texto, VoidCallback onQuitar) => InputChip(
+        label: Text(texto, style: const TextStyle(fontWeight: FontWeight.w700)),
+        onDeleted: onQuitar,
+        deleteIconColor: AppColors.red,
+        backgroundColor: AppColors.red.withValues(alpha: 0.08),
+        side: BorderSide(color: AppColors.red.withValues(alpha: 0.4)),
+      );
 
   Widget _indicadorInventario() {
     final e = _estadoInv;
@@ -1410,191 +1768,269 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _desplegable({
     required String etiqueta,
+    required IconData icono,
     required String? valor,
     required List<DropdownMenuItem<String?>> items,
     required ValueChanged<String?> onChanged,
   }) {
-    return SizedBox(
-      width: 230,
-      child: DropdownButtonFormField<String?>(
-        initialValue: valor,
-        isExpanded: true,
-        decoration: InputDecoration(
-          labelText: etiqueta,
-          filled: true,
-          fillColor: Colors.white,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: AppColors.paper2),
-          ),
+    return DropdownButtonFormField<String?>(
+      key: ValueKey('$etiqueta|$valor'),
+      initialValue: valor,
+      isExpanded: true,
+      icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.red),
+      decoration: InputDecoration(
+        labelText: etiqueta,
+        prefixIcon: Icon(icono, color: AppColors.red, size: 22),
+        filled: true,
+        fillColor: AppColors.paper,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
         ),
-        items: items,
-        onChanged: onChanged,
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: AppColors.red, width: 2),
+        ),
       ),
+      items: items,
+      onChanged: onChanged,
     );
   }
 
-  /// Filtro jerárquico: Marca -> Modelo, más categoría y disponibilidad.
-  Widget _buildFiltros() {
-    final hayFiltros = _marca != null || _modelo != null || _categoria != null || _soloDisponibles;
-    return Wrap(
-      spacing: 12,
-      runSpacing: 12,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        _desplegable(
-          etiqueta: 'Marca del vehículo',
-          valor: _marca,
-          items: [
-            const DropdownMenuItem<String?>(value: null, child: Text('Todas las marcas')),
-            ..._marcas.map((m) =>
-                DropdownMenuItem<String?>(value: m.$1, child: Text('${m.$1} (${m.$2})'))),
-          ],
-          onChanged: (v) => _filtrar(() {
-            _marca = v;
-            _modelo = null;
-            _modelos = [];
-          }, recargarFiltros: true),
-        ),
-        _desplegable(
-          etiqueta: 'Modelo',
-          valor: _modelos.any((m) => m.$1 == _modelo) ? _modelo : null,
-          items: [
-            DropdownMenuItem<String?>(
-                value: null,
-                child: Text(_marca == null ? 'Elige una marca' : 'Todos los modelos')),
-            ..._modelos.map((m) =>
-                DropdownMenuItem<String?>(value: m.$1, child: Text('${m.$1} (${m.$2})'))),
-          ],
-          onChanged: _marca == null ? (_) {} : (v) => _filtrar(() => _modelo = v),
-        ),
-        _desplegable(
-          etiqueta: 'Categoría',
-          valor: _categoria,
-          items: [
-            const DropdownMenuItem<String?>(value: null, child: Text('Todas las categorías')),
-            ..._categoriasLista
-                .map((c) => DropdownMenuItem<String?>(value: c, child: Text(c))),
-          ],
-          onChanged: (v) => _filtrar(() => _categoria = v),
-        ),
-        FilterChip(
-          label: const Text('Solo con stock'),
-          selected: _soloDisponibles,
-          selectedColor: AppColors.red.withValues(alpha: 0.15),
-          checkmarkColor: AppColors.red,
-          onSelected: (v) => _filtrar(() => _soloDisponibles = v),
-        ),
-        if (hayFiltros)
-          TextButton.icon(
-            onPressed: () => _filtrar(() {
-              _marca = null;
-              _modelo = null;
-              _categoria = null;
-              _soloDisponibles = false;
-              _modelos = [];
-            }, recargarFiltros: true),
-            icon: const Icon(Icons.close, size: 16),
-            label: const Text('Limpiar filtros'),
-          ),
+  /// Filtro jerárquico Marca → Modelo, más categoría y disponibilidad, en una sola fila.
+  Widget _buildFiltros(bool esAngosto) {
+    final marca = _desplegable(
+      etiqueta: 'Marca del vehículo',
+      icono: Icons.directions_car_outlined,
+      valor: _marca,
+      items: [
+        const DropdownMenuItem<String?>(value: null, child: Text('Todas las marcas')),
+        ..._marcas.map((m) =>
+            DropdownMenuItem<String?>(value: m.$1, child: Text('${m.$1} (${m.$2})'))),
       ],
+      onChanged: (v) => _filtrar(() {
+        _marca = v;
+        _modelo = null;
+        _modelos = [];
+      }, recargarFiltros: true),
     );
+    final modelo = _desplegable(
+      etiqueta: 'Modelo',
+      icono: Icons.badge_outlined,
+      valor: _modelos.any((m) => m.$1 == _modelo) ? _modelo : null,
+      items: [
+        DropdownMenuItem<String?>(
+            value: null, child: Text(_marca == null ? 'Primero elige una marca' : 'Todos los modelos')),
+        ..._modelos.map((m) =>
+            DropdownMenuItem<String?>(value: m.$1, child: Text('${m.$1} (${m.$2})'))),
+      ],
+      onChanged: _marca == null ? (_) {} : (v) => _filtrar(() => _modelo = v),
+    );
+    final categoria = _desplegable(
+      etiqueta: 'Categoría',
+      icono: Icons.category_outlined,
+      valor: _categoria,
+      items: [
+        const DropdownMenuItem<String?>(value: null, child: Text('Todas las categorías')),
+        ..._categoriasLista.map((c) => DropdownMenuItem<String?>(value: c, child: Text(c))),
+      ],
+      onChanged: (v) => _filtrar(() => _categoria = v),
+    );
+    final stock = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      decoration: BoxDecoration(
+        color: _soloDisponibles ? AppColors.red.withValues(alpha: 0.08) : AppColors.paper,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        const Icon(Icons.inventory_2_outlined, color: AppColors.red, size: 22),
+        const SizedBox(width: 10),
+        const Text('Solo con stock', style: TextStyle(fontWeight: FontWeight.w700)),
+        const SizedBox(width: 6),
+        Switch(
+          value: _soloDisponibles,
+          activeThumbColor: AppColors.red,
+          onChanged: (v) => _filtrar(() => _soloDisponibles = v),
+        ),
+      ]),
+    );
+    if (esAngosto) {
+      return Column(children: [
+        marca,
+        const SizedBox(height: 12),
+        modelo,
+        const SizedBox(height: 12),
+        categoria,
+        const SizedBox(height: 12),
+        Align(alignment: Alignment.centerLeft, child: stock),
+      ]);
+    }
+    return Row(children: [
+      Expanded(child: marca),
+      const SizedBox(width: 14),
+      Expanded(child: modelo),
+      const SizedBox(width: 14),
+      Expanded(child: categoria),
+      const SizedBox(width: 14),
+      stock,
+    ]);
   }
 
   // ---------- Contacto ----------
 
   Widget _buildContacto(bool esAngosto) {
-    final tarjetas = <(IconData, String, String, VoidCallback?)>[
-      (Icons.chat_outlined, 'WhatsApp', '+${SiteContent.actual.contactoWhatsapp}',
-          () => launchUrl(Uri.parse('https://wa.me/${SiteContent.actual.contactoWhatsapp}'))),
-      (Icons.mail_outline, 'Correo', SiteContent.actual.contactoEmail,
-          () => launchUrl(Uri.parse('mailto:${SiteContent.actual.contactoEmail}'))),
-      (Icons.place_outlined, 'Dirección', SiteContent.actual.contactoDireccion,
-          () => launchUrl(Uri.parse(SiteContent.actual.contactoMapsUrl))),
-      (Icons.schedule_outlined, 'Horario', SiteContent.actual.contactoHorario, null),
+    final c = SiteContent.actual;
+    final estado = EstadoHorario.de(c.contactoHorario);
+    final tarjetas = <({Widget logo, String titulo, String valor, String accion, VoidCallback? onTap})>[
+      (
+        logo: const LogoWhatsapp(size: 64),
+        titulo: 'WhatsApp',
+        valor: '+${c.contactoWhatsapp}',
+        accion: 'Escribir ahora',
+        onTap: () => launchUrl(Uri.parse('https://wa.me/${c.contactoWhatsapp}'), mode: LaunchMode.externalApplication),
+      ),
+      (
+        logo: InsigniaIcono(hijo: const IconoMarca('gmail', size: 30), tam: 64, colores: const [Color(0xFFEA4335), Color(0xFFB3261E)]),
+        titulo: 'Correo',
+        valor: c.contactoEmail,
+        accion: 'Enviar correo',
+        onTap: () => launchUrl(Uri.parse('mailto:${c.contactoEmail}')),
+      ),
+      (
+        logo: InsigniaIcono(hijo: const IconoMarca('googlemaps', size: 30), tam: 64, colores: const [Color(0xFF34A853), Color(0xFF1B6B33)]),
+        titulo: 'Dirección',
+        valor: c.contactoDireccion,
+        accion: 'Cómo llegar',
+        onTap: () => launchUrl(Uri.parse(c.contactoMapsUrl), mode: LaunchMode.externalApplication),
+      ),
+      (
+        logo: const InsigniaIcono(icono: Icons.schedule, tam: 64, colores: [Color(0xFFFFC145), Color(0xFFFF8A00)]),
+        titulo: 'Horario de atención',
+        valor: c.contactoHorario,
+        accion: estado == null ? 'Atención presencial' : (estado.abierto ? 'Abierto ahora' : 'Cerrado ahora'),
+        onTap: null,
+      ),
     ];
 
     return Container(
       width: double.infinity,
-      color: AppColors.char2,
+      clipBehavior: Clip.hardEdge,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF1A1A1C), Color(0xFF2B1013), Color(0xFF1A1A1C)]),
+      ),
       padding: EdgeInsets.symmetric(
-          horizontal: _padX(esAngosto), vertical: esAngosto ? 40 : 70),
-      child: Centrado(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            TituloSeccion(
-                kicker: SiteContent.actual.contactoKicker,
-                titulo: SiteContent.actual.contactoTitulo,
-                oscuro: true),
-            const SizedBox(height: 28),
-            LayoutBuilder(builder: (context, c) {
-              final cols = esAngosto ? 1 : (c.maxWidth > 900 ? 4 : 2);
-              const gap = 16.0;
-              final w = (c.maxWidth - gap * (cols - 1)) / cols;
-              return Wrap(
-                spacing: gap,
-                runSpacing: gap,
-                children: tarjetas.map((t) => _tarjetaContacto(t, w)).toList(),
-              );
-            }),
-            const SizedBox(height: 28),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(18),
-              child: MapaUbicacion(
-                consulta: SiteContent.actual.contactoDireccion,
-                alto: esAngosto ? 260 : 380,
-              ),
+          horizontal: _padX(esAngosto), vertical: esAngosto ? 40 : 100),
+      child: Stack(
+        children: [
+          Positioned(
+            right: -150,
+            top: -150,
+            child: Container(
+              width: 460,
+              height: 460,
+              decoration: BoxDecoration(
+                  shape: BoxShape.circle, color: AppColors.red.withValues(alpha: 0.10)),
             ),
-          ],
-        ),
+          ),
+          Centrado(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TituloSeccion(kicker: c.contactoKicker, titulo: c.contactoTitulo, oscuro: true),
+                const SizedBox(height: 40),
+                LayoutBuilder(builder: (context, box) {
+                  final cols = esAngosto ? 1 : (box.maxWidth > 1000 ? 4 : 2);
+                  const gap = 24.0;
+                  final w = (box.maxWidth - gap * (cols - 1)) / cols;
+                  return Wrap(
+                    spacing: gap,
+                    runSpacing: gap,
+                    children: tarjetas
+                        .map((t) => Revelar(child: _tarjetaContacto(t, w, estado)))
+                        .toList(),
+                  );
+                }),
+                const SizedBox(height: 40),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(26),
+                  child: MapaUbicacion(
+                    consulta: c.contactoDireccion,
+                    alto: esAngosto ? 300 : 460,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _tarjetaContacto((IconData, String, String, VoidCallback?) t, double ancho) {
+  Widget _tarjetaContacto(
+      ({Widget logo, String titulo, String valor, String accion, VoidCallback? onTap}) t,
+      double ancho,
+      EstadoHorario? estado) {
+    final esHorario = t.onTap == null;
+    final colorAccion = esHorario
+        ? (estado?.abierto == true ? const Color(0xFF58D68D) : const Color(0xFFFF7B7B))
+        : const Color(0xFFFFC145);
     return SizedBox(
       width: ancho,
       child: HoverLift(
-        onTap: t.$4,
+        onTap: t.onTap,
         builder: (context, hover) => AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          height: 118,
-          padding: const EdgeInsets.all(18),
+          duration: const Duration(milliseconds: 220),
+          height: 256,
+          padding: const EdgeInsets.all(26),
           decoration: BoxDecoration(
-            color: AppColors.char,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: hover && t.$4 != null ? AppColors.red : Colors.white12),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: hover && !esHorario
+                  ? const [Color(0xFF3A1317), Color(0xFF241012)]
+                  : [Colors.white.withValues(alpha: 0.08), Colors.white.withValues(alpha: 0.03)],
+            ),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: hover && !esHorario ? AppColors.red : Colors.white24, width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                  color: AppColors.red.withValues(alpha: hover && !esHorario ? 0.25 : 0),
+                  blurRadius: 28,
+                  offset: const Offset(0, 12)),
+            ],
           ),
-          child: Row(
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                padding: const EdgeInsets.all(9),
-                decoration: BoxDecoration(
-                  color: AppColors.red.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(t.$1, color: AppColors.yellow, size: 20),
-              ),
-              const SizedBox(width: 12),
+              AnimatedScale(
+                  scale: hover && !esHorario ? 1.08 : 1,
+                  duration: const Duration(milliseconds: 220),
+                  child: t.logo),
+              const SizedBox(height: 18),
+              Text(t.titulo,
+                  style: const TextStyle(
+                      color: Colors.white70, fontWeight: FontWeight.w800, fontSize: 13, letterSpacing: 0.6)),
+              const SizedBox(height: 6),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(t.$2,
-                        style: const TextStyle(
-                            color: AppColors.yellow, fontWeight: FontWeight.w800, fontSize: 12)),
-                    const SizedBox(height: 6),
-                    Expanded(
-                      child: Text(t.$3,
-                          overflow: TextOverflow.fade,
-                          style: const TextStyle(color: Colors.white, fontSize: 13.5, height: 1.4)),
-                    ),
-                  ],
-                ),
+                child: Text(t.valor,
+                    overflow: TextOverflow.fade,
+                    style: const TextStyle(
+                        color: Colors.white, fontSize: 17, fontWeight: FontWeight.w700, height: 1.4)),
               ),
+              Row(children: [
+                if (esHorario) Icon(Icons.circle, size: 10, color: colorAccion),
+                if (esHorario) const SizedBox(width: 8),
+                Text(t.accion,
+                    style: TextStyle(color: colorAccion, fontWeight: FontWeight.w800, fontSize: 14.5)),
+                if (!esHorario) ...[
+                  const SizedBox(width: 6),
+                  Icon(Icons.arrow_forward, size: 16, color: colorAccion),
+                ],
+              ]),
             ],
           ),
         ),
@@ -1605,54 +2041,136 @@ class _HomeScreenState extends State<HomeScreen> {
   // ---------- Footer ----------
 
   Widget _buildFooter(bool esAngosto) {
+    final c = SiteContent.actual;
+    Widget enlace(String t, VoidCallback onTap) => InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Text(t, style: const TextStyle(color: Colors.white70, fontSize: 15)),
+          ),
+        );
+    Widget titulo(String t) => Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Text(t.toUpperCase(),
+              style: const TextStyle(
+                  color: AppColors.yellow, fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1.4)),
+        );
+    final marca = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Image.asset('assets/images/logo_maykel.jpg', height: 76, fit: BoxFit.contain),
+        ),
+        const SizedBox(height: 16),
+        const Text(
+            'Repuestos para marcas chinas e insumos de faena minera. Consulta compatibilidad y reserva en línea; retira en tienda.',
+            style: TextStyle(color: Colors.white60, fontSize: 14.5, height: 1.6)),
+        const SizedBox(height: 18),
+        ElevatedButton.icon(
+          onPressed: () => launchUrl(Uri.parse('https://wa.me/${c.contactoWhatsapp}'),
+              mode: LaunchMode.externalApplication),
+          icon: const LogoWhatsapp(size: 26),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.white,
+            foregroundColor: const Color(0xFF0E6B3A),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            textStyle: const TextStyle(fontWeight: FontWeight.w900),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+          ),
+          label: const Text('Escríbenos'),
+        ),
+      ],
+    );
+    final enlaces = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        titulo('Navegación'),
+        enlace('Inicio', () => _scrollController.animateTo(0,
+            duration: const Duration(milliseconds: 600), curve: Curves.easeInOutCubic)),
+        enlace('Marcas', () => _scrollA(_marcasKey)),
+        enlace('Categorías', () => _scrollA(_categoriasKey)),
+        enlace('Servicios', () => _scrollA(_serviciosKey)),
+        enlace('Catálogo', () => _scrollA(_catalogoKey)),
+        enlace('Contacto', () => _scrollA(_contactoKey)),
+      ],
+    );
+    final horario = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        titulo('Horario'),
+        for (final l in c.contactoHorario.split(RegExp(r'[\n;]')).where((e) => e.trim().isNotEmpty))
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 5),
+            child: Text(l.trim(), style: const TextStyle(color: Colors.white70, fontSize: 15, height: 1.4)),
+          ),
+        const SizedBox(height: 10),
+        const Text('Dirección', style: TextStyle(color: Colors.white38, fontSize: 12.5)),
+        const SizedBox(height: 4),
+        InkWell(
+          onTap: () => launchUrl(Uri.parse(c.contactoMapsUrl), mode: LaunchMode.externalApplication),
+          child: Text(c.contactoDireccion,
+              style: const TextStyle(color: Colors.white70, fontSize: 15, height: 1.4)),
+        ),
+      ],
+    );
+    final contacto = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        titulo('Contacto'),
+        enlace('WhatsApp +${c.contactoWhatsapp}', () => launchUrl(
+            Uri.parse('https://wa.me/${c.contactoWhatsapp}'), mode: LaunchMode.externalApplication)),
+        enlace(c.contactoEmail, () => launchUrl(Uri.parse('mailto:${c.contactoEmail}'))),
+        enlace('Aviso legal', () => Navigator.of(context)
+            .push(MaterialPageRoute(builder: (_) => const AvisoLegalScreen()))),
+        enlace('Acceso administrador', _abrirAdmin),
+      ],
+    );
     return Container(
       width: double.infinity,
-      color: AppColors.char,
-      padding: EdgeInsets.symmetric(horizontal: esAngosto ? 20 : 60, vertical: 30),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Image.asset('assets/images/logo_maykel.jpg', height: 56, fit: BoxFit.contain),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 20,
-            runSpacing: 10,
-            children: [
-              InkWell(
-                onTap: () =>
-                    launchUrl(Uri.parse('https://wa.me/${SiteContent.actual.contactoWhatsapp}')),
-                child: Text('WhatsApp: +${SiteContent.actual.contactoWhatsapp}',
-                    style: const TextStyle(color: Colors.white60, fontSize: 12.5)),
-              ),
-              InkWell(
-                onTap: () => launchUrl(Uri.parse('mailto:${SiteContent.actual.contactoEmail}')),
-                child: Text(SiteContent.actual.contactoEmail,
-                    style: const TextStyle(color: Colors.white60, fontSize: 12.5)),
-              ),
-              InkWell(
-                onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const AvisoLegalScreen())),
-                child: const Text('Aviso legal',
-                    style: TextStyle(color: Colors.white60, fontSize: 12.5)),
-              ),
-              InkWell(
-                onTap: _abrirAdmin,
-                child: const Text('Acceso administrador',
-                    style: TextStyle(color: Colors.white60, fontSize: 12.5)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Text('© ${DateTime.now().year} ${SiteContent.actual.footerDerechos}',
-              style: const TextStyle(color: Colors.white38, fontSize: 11)),
-        ],
+      decoration: const BoxDecoration(
+        color: AppColors.char,
+        border: Border(top: BorderSide(color: AppColors.red, width: 4)),
+      ),
+      padding: EdgeInsets.fromLTRB(esAngosto ? 20 : 60, esAngosto ? 36 : 64, esAngosto ? 20 : 60, 24),
+      child: Centrado(
+        child: Column(
+          children: [
+            if (esAngosto)
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                marca,
+                const SizedBox(height: 28),
+                enlaces,
+                const SizedBox(height: 24),
+                horario,
+                const SizedBox(height: 24),
+                contacto,
+              ])
+            else
+              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Expanded(flex: 4, child: marca),
+                const SizedBox(width: 48),
+                Expanded(flex: 2, child: enlaces),
+                const SizedBox(width: 32),
+                Expanded(flex: 3, child: horario),
+                const SizedBox(width: 32),
+                Expanded(flex: 3, child: contacto),
+              ]),
+            const SizedBox(height: 36),
+            const Divider(color: Colors.white12),
+            const SizedBox(height: 14),
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              runSpacing: 6,
+              children: [
+                Text('© ${DateTime.now().year} ${c.footerDerechos}',
+                    style: const TextStyle(color: Colors.white38, fontSize: 12.5)),
+                const Text('Hecho en Calama, Región de Antofagasta',
+                    style: TextStyle(color: Colors.white38, fontSize: 12.5)),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

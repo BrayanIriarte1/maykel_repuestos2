@@ -530,6 +530,40 @@ class ApiService {
 
   // ---------- Admin: usuarios administradores ----------
 
+  // ---------- Admin: notificaciones y sincronización ----------
+
+  Future<Map<String, dynamic>> getEstadoNotificaciones() async {
+    final resp = await http.get(_uri('/api/admin/notificaciones/estado'),
+        headers: _headers(admin: true));
+    if (resp.statusCode != 200) throw ApiException('No se pudo consultar el estado de las notificaciones.');
+    return jsonDecode(resp.body) as Map<String, dynamic>;
+  }
+
+  /// [canal]: 'correo' o 'whatsapp'. Devuelve {ok, error?, ms?}.
+  Future<Map<String, dynamic>> probarNotificacion(String canal, {String? destino}) async {
+    final resp = await http.post(_uri('/api/admin/notificaciones/probar'),
+        headers: _headers(admin: true, json: true),
+        body: jsonEncode({'canal': canal, if (destino != null && destino.isNotEmpty) 'destino': destino}));
+    if (resp.statusCode != 200) throw ApiException(_mensajeError(resp) ?? 'No se pudo hacer la prueba.');
+    return jsonDecode(resp.body) as Map<String, dynamic>;
+  }
+
+  Future<({bool enCurso, List<Map<String, dynamic>> items})> getHistorialSync() async {
+    final resp = await http.get(_uri('/api/admin/sync/historial'), headers: _headers(admin: true));
+    if (resp.statusCode != 200) throw ApiException('No se pudo cargar el historial de sincronización.');
+    final d = jsonDecode(resp.body) as Map<String, dynamic>;
+    return (
+      enCurso: d['enCurso'] == true,
+      items: (d['items'] as List).whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList(),
+    );
+  }
+
+  Future<String> ejecutarSincronizacion() async {
+    final resp = await http.post(_uri('/api/admin/sync/ejecutar'), headers: _headers(admin: true));
+    if (resp.statusCode != 202) throw ApiException(_mensajeError(resp) ?? 'No se pudo iniciar la sincronización.');
+    return (jsonDecode(resp.body) as Map<String, dynamic>)['mensaje']?.toString() ?? 'Sincronización iniciada.';
+  }
+
   Future<List<UsuarioAdmin>> getUsuariosAdmin() async {
     final resp = await http.get(_uri('/api/admin/usuarios'),
         headers: _headers(admin: true));

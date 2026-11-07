@@ -258,6 +258,35 @@ void main() {
     });
   });
 
+  group('Notificaciones y sincronización (panel)', () {
+    test('estado de notificaciones exige sesión y no filtra secretos', () async {
+      expect((await http.get(u('/api/admin/notificaciones/estado'))).statusCode, 401);
+      final r = await http.get(u('/api/admin/notificaciones/estado'), headers: adminHeaders);
+      expect(r.statusCode, 200);
+      final d = jsonDecode(r.body) as Map<String, dynamic>;
+      expect(d['correo'], isA<Map>());
+      expect(d['whatsapp'], isA<Map>());
+      expect(r.body.contains('SMTP_PASS='), isFalse);
+    });
+
+    test('probar correo sin configurar informa qué falta', () async {
+      final r = await http.post(u('/api/admin/notificaciones/probar'),
+          headers: adminHeaders, body: jsonEncode({'canal': 'correo'}));
+      expect(r.statusCode, 200);
+      final d = jsonDecode(r.body) as Map<String, dynamic>;
+      expect(d.containsKey('ok'), isTrue);
+    });
+
+    test('historial de sincronización protegido y con formato', () async {
+      expect((await http.get(u('/api/admin/sync/historial'))).statusCode, 401);
+      final r = await http.get(u('/api/admin/sync/historial'), headers: adminHeaders);
+      expect(r.statusCode, 200);
+      final d = jsonDecode(r.body) as Map<String, dynamic>;
+      expect(d['items'], isA<List>());
+      expect(d['enCurso'], isA<bool>());
+    });
+  });
+
   group('Sincronización (RF05)', () {
     test('stock 0 y reposición se procesan y el SKU queda registrado',
         () async {

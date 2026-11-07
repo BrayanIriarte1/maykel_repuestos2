@@ -8,9 +8,13 @@ import '../config.dart';
 import '../models.dart';
 import '../utils/format.dart';
 import '../utils/pdf_report.dart';
+import '../widgets/admin_config_widgets.dart';
 import '../widgets/admin_inventario.dart';
+import '../widgets/admin_notificaciones.dart';
 import '../widgets/admin_reservas.dart';
+import '../widgets/admin_ui.dart';
 import '../widgets/efectos.dart';
+import '../widgets/portada_extra.dart';
 
 /// Panel de administración con navegación lateral (sidebar), igual que el
 /// diseño de referencia: Inicio, Analítica, Catálogo, Reservas, Stock,
@@ -98,6 +102,16 @@ class _AdminScreenState extends State<AdminScreen> {
   final _contactoMapsUrlCtrl = TextEditingController();
   final _contactoHorarioCtrl = TextEditingController();
   final _avisoLegalActualizadoCtrl = TextEditingController();
+  String _cfgSeccion = 'portada';
+  late final Listenable _cfgCambios = Listenable.merge([
+    _nombreNegocioCtrl, _heroTituloCtrl, _heroSubtituloCtrl, _heroBotonCatalogoCtrl, _heroBotonContactoCtrl,
+    _heroEstadisticaProductosEtiquetaCtrl, _heroEstadisticaMarcasValorCtrl, _heroEstadisticaMarcasEtiquetaCtrl,
+    _heroEstadisticaCategoriasValorCtrl, _heroEstadisticaCategoriasEtiquetaCtrl, _historiaKickerCtrl,
+    _serviciosKickerCtrl, _serviciosTituloCtrl, _catalogoKickerCtrl, _catalogoTituloCtrl, _marcasTituloCtrl,
+    _marcasSubtituloCtrl, _catalogoBusquedaHintCtrl, _contactoKickerCtrl, _contactoTituloCtrl,
+    _footerDerechosCtrl, _historiaTituloCtrl, _historiaTextoCtrl, _contactoWhatsappCtrl, _contactoEmailCtrl,
+    _contactoDireccionCtrl, _contactoMapsUrlCtrl, _contactoHorarioCtrl, _avisoLegalActualizadoCtrl,
+  ]);
   bool _guardandoContenido = false;
   String? _resultadoContenido;
   bool _resultadoContenidoEsError = false;
@@ -413,20 +427,29 @@ class _AdminScreenState extends State<AdminScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(18, 22, 18, 18),
-            child: Row(
+            padding: const EdgeInsets.fromLTRB(20, 24, 20, 14),
+            child: Column(
               children: [
-                Expanded(
+                Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(color: AppColors.red.withValues(alpha: 0.35), blurRadius: 22),
+                    ],
+                  ),
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(14),
                     child: Image.asset('assets/images/logo_maykel.jpg', fit: BoxFit.contain),
                   ),
                 ),
+                const SizedBox(height: 14),
+                const Text('PANEL DE ADMINISTRACIÓN',
+                    style: TextStyle(
+                        color: Colors.white38, fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 1.6)),
               ],
             ),
           ),
-          const Divider(color: Colors.white12, height: 1),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -467,45 +490,63 @@ class _AdminScreenState extends State<AdminScreen> {
   Widget _itemSidebar(_Seccion s) {
     final activo = s.clave == _seccionActiva;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
+      padding: const EdgeInsets.symmetric(vertical: 3),
       child: Material(
-        color: activo ? AppColors.red : Colors.transparent,
-        borderRadius: BorderRadius.circular(12),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: () {
-            setState(() => _seccionActiva = s.clave);
-            if (MediaQuery.of(context).size.width < 900) {
-              Navigator.of(context).maybePop();
-            }
-          },
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-            child: Row(
-              children: [
-                Icon(s.icono, size: 18, color: activo ? Colors.white : Colors.white60),
-                const SizedBox(width: 12),
-                Text(s.etiqueta,
-                    style: TextStyle(
-                        color: activo ? Colors.white : Colors.white60,
-                        fontSize: 13.5,
-                        fontWeight: activo ? FontWeight.w700 : FontWeight.w400)),
-                if (s.clave == 'reservas' && _pendientes > 0) ...[
-                  const Spacer(),
+        color: Colors.transparent,
+        child: Ink(
+          decoration: BoxDecoration(
+            gradient: activo
+                ? const LinearGradient(colors: [Color(0xFFE53945), Color(0xFFB01822)])
+                : null,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: activo
+                ? [BoxShadow(color: AppColors.red.withValues(alpha: 0.4), blurRadius: 16, offset: const Offset(0, 6))]
+                : null,
+          ),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(14),
+            hoverColor: Colors.white.withValues(alpha: 0.07),
+            onTap: () {
+              setState(() => _seccionActiva = s.clave);
+              if (MediaQuery.of(context).size.width < 900) {
+                Navigator.of(context).maybePop();
+              }
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+              child: Row(
+                children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    padding: const EdgeInsets.all(7),
                     decoration: BoxDecoration(
-                      color: activo ? Colors.white : AppColors.red,
-                      borderRadius: BorderRadius.circular(20),
+                      color: Colors.white.withValues(alpha: activo ? 0.2 : 0.06),
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Text('$_pendientes',
-                        style: TextStyle(
-                            color: activo ? AppColors.red : Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w900)),
+                    child: Icon(s.icono, size: 18, color: activo ? Colors.white : Colors.white60),
                   ),
+                  const SizedBox(width: 12),
+                  Text(s.etiqueta,
+                      style: TextStyle(
+                          color: activo ? Colors.white : Colors.white70,
+                          fontSize: 14.5,
+                          fontWeight: activo ? FontWeight.w800 : FontWeight.w500)),
+                  if (s.clave == 'reservas' && _pendientes > 0) ...[
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: activo ? Colors.white : AppColors.red,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text('$_pendientes',
+                          style: TextStyle(
+                              color: activo ? AppColors.red : Colors.white,
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w900)),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),
@@ -527,9 +568,19 @@ class _AdminScreenState extends State<AdminScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
       child: Row(
         children: [
-          Text(seccion.etiqueta,
-              style: const TextStyle(
-                  fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.char)),
+          InsigniaIcono(icono: seccion.icono, tam: 40),
+          const SizedBox(width: 14),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(seccion.etiqueta,
+                  style: const TextStyle(
+                      fontSize: 20, fontWeight: FontWeight.w900, color: AppColors.char, height: 1.1)),
+              Text(_descripcionSeccion(seccion.clave),
+                  style: const TextStyle(fontSize: 12, color: AppColors.steel)),
+            ],
+          ),
           const Spacer(),
           if (_ultimaActualizacion != null)
             Text(
@@ -578,6 +629,25 @@ class _AdminScreenState extends State<AdminScreen> {
   }
 
   /// Campana: reservas pendientes y alertas de inventario, con acceso directo.
+  String _descripcionSeccion(String clave) {
+    switch (clave) {
+      case 'analitica':
+        return 'Ventas, demanda y rendimiento del negocio';
+      case 'catalogo':
+        return 'Todos los repuestos publicados en la web';
+      case 'reservas':
+        return 'Solicitudes de clientes por confirmar y entregar';
+      case 'stock':
+        return 'Ventas de mostrador, precios y existencias';
+      case 'usuarios':
+        return 'Equipo, roles y permisos de acceso';
+      case 'configuracion':
+        return 'Textos del sitio, notificaciones y sincronización';
+      default:
+        return 'Resumen del día y tareas pendientes';
+    }
+  }
+
   Widget _campana() {
     final pend = _reservas.where((r) => r.estado == 'pendiente').take(5).toList();
     final d = _dashboard;
@@ -649,6 +719,10 @@ class _AdminScreenState extends State<AdminScreen> {
   // ---------------------------------------------------------------
 
   Widget _buildContenido() {
+    return AdminAncho(child: _contenidoSeccion());
+  }
+
+  Widget _contenidoSeccion() {
     switch (_seccionActiva) {
       case 'analitica':
         return _buildAnaliticaTab();
@@ -679,57 +753,86 @@ class _AdminScreenState extends State<AdminScreen> {
       child: ListView(
         padding: const EdgeInsets.all(24),
         children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(26),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                  colors: [Color(0xFF1A1A1C), Color(0xFF4A0F14)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Hola, ${_sesion.usuario.isEmpty ? "administrador" : _sesion.usuario} 👋',
-                          style: const TextStyle(
-                              fontSize: 24, fontWeight: FontWeight.w900, color: Colors.white)),
-                      const SizedBox(height: 6),
-                      Text(
-                        '${_saludoDia()} · ${_sesion.esSuperAdmin ? 'Propietario' : (_sesion.rolNombre ?? 'Equipo')}'
-                        '${_pendientes > 0 && _sesion.puede('reservas') ? ' · Tienes $_pendientes reserva${_pendientes == 1 ? '' : 's'} por atender' : ''}',
-                        style: const TextStyle(color: Colors.white70, fontSize: 14),
-                      ),
-                    ],
-                  ),
+          AdminHero(
+            titulo: 'Hola, ${_sesion.usuario.isEmpty ? "administrador" : _sesion.usuario} 👋',
+            subtitulo:
+                '${_saludoDia()} · ${_sesion.esSuperAdmin ? 'Propietario' : (_sesion.rolNombre ?? 'Equipo')}'
+                '${_pendientes > 0 && _sesion.puede('reservas') ? ' · Tienes $_pendientes reserva${_pendientes == 1 ? '' : 's'} por atender' : ''}',
+            icono: Icons.dashboard_customize_outlined,
+            derecha: Wrap(spacing: 10, runSpacing: 10, children: [
+              if (_sesion.puede('reservas'))
+                FilledButton.icon(
+                  onPressed: () => setState(() => _seccionActiva = 'reservas'),
+                  icon: const Icon(Icons.event_note_outlined, size: 18),
+                  label: const Text('Ver reservas'),
+                  style: FilledButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: AppColors.char,
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16)),
                 ),
-                const Icon(Icons.dashboard_customize_outlined, color: Colors.white24, size: 56),
-              ],
-            ),
+              if (_sesion.puede('stock'))
+                OutlinedButton.icon(
+                  onPressed: () => setState(() => _seccionActiva = 'stock'),
+                  icon: const Icon(Icons.point_of_sale_outlined, size: 18),
+                  label: const Text('Registrar venta'),
+                  style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      side: const BorderSide(color: Colors.white54),
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16)),
+                ),
+            ]),
           ),
           const SizedBox(height: 24),
           if (d != null)
-            Wrap(
-              spacing: 14,
-              runSpacing: 14,
-              children: [
-                if (_sesion.puede('reservas'))
-                  _kpiCard('$_pendientes', 'Reservas por atender', Icons.hourglass_top_rounded),
-                if (_sesion.puede('reservas'))
-                  _kpiCard('${d.reservasConfirmadas}',
-                      'Por retirar (${d.unidadesRetenidas} u.)', Icons.inventory_outlined),
-                _kpiCard('${d.productosPublicados}', 'Productos publicados', Icons.inventory_2_outlined),
-                _kpiCard('${d.agotadosCount}', 'Productos agotados', Icons.report_outlined),
-                if (_sesion.puede('stock'))
-                  _kpiCard('${d.totalVentas}', 'Ventas registradas', Icons.point_of_sale_outlined),
-                if (_sesion.puede('stock'))
-                  _kpiCard(formatCLP(d.montoVentas), 'Monto vendido', Icons.payments_outlined),
-              ],
-            ),
+            LayoutBuilder(builder: (context, c) {
+              final cols = c.maxWidth >= 1500 ? 6 : (c.maxWidth >= 1100 ? 3 : (c.maxWidth >= 640 ? 2 : 1));
+              const gap = 16.0;
+              final w = (c.maxWidth - gap * (cols - 1)) / cols;
+              Widget k(Widget kpi) => SizedBox(width: w, child: kpi);
+              return Wrap(
+                spacing: gap,
+                runSpacing: gap,
+                children: [
+                  if (_sesion.puede('reservas'))
+                    k(KpiTile(
+                        valor: '$_pendientes',
+                        etiqueta: 'Reservas por atender',
+                        icono: Icons.hourglass_top_rounded,
+                        colores: AdminColores.ambar,
+                        nota: _pendientes > 0 ? 'Atender ahora' : 'Todo al día',
+                        onTap: () => setState(() => _seccionActiva = 'reservas'))),
+                  if (_sesion.puede('reservas'))
+                    k(KpiTile(
+                        valor: '${d.reservasConfirmadas}',
+                        etiqueta: 'Por retirar (${d.unidadesRetenidas} u.)',
+                        icono: Icons.inventory_outlined,
+                        colores: AdminColores.azul)),
+                  k(KpiTile(
+                      valor: '${d.productosPublicados}',
+                      etiqueta: 'Productos publicados',
+                      icono: Icons.inventory_2_outlined,
+                      colores: AdminColores.verde,
+                      onTap: _sesion.puede('catalogo') ? () => setState(() => _seccionActiva = 'catalogo') : null)),
+                  k(KpiTile(
+                      valor: '${d.agotadosCount}',
+                      etiqueta: 'Productos agotados',
+                      icono: Icons.report_outlined,
+                      colores: AdminColores.rojo)),
+                  if (_sesion.puede('stock'))
+                    k(KpiTile(
+                        valor: '${d.totalVentas}',
+                        etiqueta: 'Ventas registradas',
+                        icono: Icons.point_of_sale_outlined,
+                        colores: AdminColores.violeta)),
+                  if (_sesion.puede('stock'))
+                    k(KpiTile(
+                        valor: formatCLP(d.montoVentas),
+                        etiqueta: 'Monto vendido',
+                        icono: Icons.payments_outlined,
+                        colores: AdminColores.verde)),
+                ],
+              );
+            }),
           const SizedBox(height: 24),
           LayoutBuilder(builder: (context, c) {
             final dos = c.maxWidth > 900;
@@ -783,29 +886,18 @@ class _AdminScreenState extends State<AdminScreen> {
     String? accion,
     VoidCallback? onAccion,
   }) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.paper2),
-        boxShadow: const [BoxShadow(color: Color(0x0F000000), blurRadius: 12, offset: Offset(0, 5))],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(children: [
-            Icon(icono, size: 20, color: AppColors.red),
-            const SizedBox(width: 8),
-            Expanded(
-                child: Text(titulo,
-                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15))),
-            if (accion != null) TextButton(onPressed: onAccion, child: Text(accion)),
-          ]),
-          const SizedBox(height: 8),
-          child,
-        ],
-      ),
+    return AdminPanel(
+      titulo: titulo,
+      icono: icono,
+      accion: accion == null
+          ? null
+          : TextButton.icon(
+              onPressed: onAccion,
+              icon: const Icon(Icons.arrow_forward, size: 16),
+              label: Text(accion),
+              style: TextButton.styleFrom(foregroundColor: AppColors.red),
+            ),
+      child: child,
     );
   }
 
@@ -912,75 +1004,45 @@ class _AdminScreenState extends State<AdminScreen> {
     return HoverLift(
       onTap: () => setState(() => _seccionActiva = s.clave),
       builder: (context, hover) => AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        width: 180,
-        padding: const EdgeInsets.all(18),
+        duration: const Duration(milliseconds: 200),
+        width: 210,
+        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: hover ? AppColors.char : Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: hover ? AppColors.char : AppColors.paper2),
-          boxShadow: const [
-            BoxShadow(color: Color(0x10000000), blurRadius: 12, offset: Offset(0, 5)),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: hover ? const [Color(0xFF2A2A2E), AppColors.char] : const [Colors.white, Colors.white],
+          ),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: hover ? AppColors.red : AdminColores.borde, width: 1.4),
+          boxShadow: [
+            BoxShadow(
+                color: (hover ? AppColors.red : Colors.black).withValues(alpha: hover ? 0.25 : 0.06),
+                blurRadius: hover ? 22 : 12,
+                offset: const Offset(0, 8)),
           ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(s.icono, color: AppColors.red, size: 26),
-            const SizedBox(height: 12),
+            InsigniaIcono(icono: s.icono, tam: 46),
+            const SizedBox(height: 14),
             Text(s.etiqueta,
                 style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13.5,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 15,
                     color: hover ? Colors.white : AppColors.char)),
+            const SizedBox(height: 2),
+            Text(_descripcionSeccion(s.clave),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 12, height: 1.3, color: hover ? Colors.white60 : AppColors.steel)),
           ],
         ),
       ),
     );
   }
 
-  Widget _kpiCard(String valor, String etiqueta, IconData icono) {
-    return Container(
-      width: 230,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.paper2),
-        boxShadow: const [
-          BoxShadow(color: Color(0x12000000), blurRadius: 14, offset: Offset(0, 6)),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                  colors: [AppColors.red, AppColors.redDark],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(icono, color: Colors.white, size: 22),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(valor,
-                    style: const TextStyle(
-                        fontSize: 24, fontWeight: FontWeight.w900, color: AppColors.char)),
-                Text(etiqueta,
-                    style: TextStyle(fontSize: 11.5, color: AppColors.steel), maxLines: 2),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   // ---------------------------------------------------------------
   // Analítica (dashboard con gráficos)
@@ -1087,21 +1149,69 @@ class _AdminScreenState extends State<AdminScreen> {
       child: ListView(
         padding: const EdgeInsets.all(24),
         children: [
-          Wrap(
-            spacing: 14,
-            runSpacing: 14,
-            children: [
-              _kpiCard('${d.totalVentas}', 'Ventas registradas', Icons.point_of_sale_outlined),
-              _kpiCard(formatCLP(d.montoVentas), 'Monto vendido (CLP)', Icons.payments_outlined),
-              _kpiCard('${d.totalReservas}', 'Reservas totales (${d.reservasPendientes} pend.)',
-                  Icons.event_note_outlined),
-              _kpiCard('${d.reservasConfirmadas}',
+          LayoutBuilder(builder: (context, c) {
+            final cols = c.maxWidth >= 1500 ? 6 : (c.maxWidth >= 1100 ? 3 : (c.maxWidth >= 640 ? 2 : 1));
+            const gap = 16.0;
+            final w = (c.maxWidth - gap * (cols - 1)) / cols;
+            Widget k(String v, String e, IconData i, List<Color> col) =>
+                SizedBox(width: w, child: KpiTile(valor: v, etiqueta: e, icono: i, colores: col));
+            return Wrap(spacing: gap, runSpacing: gap, children: [
+              k('${d.totalVentas}', 'Ventas registradas', Icons.point_of_sale_outlined, AdminColores.violeta),
+              k(formatCLP(d.montoVentas), 'Monto vendido (CLP)', Icons.payments_outlined, AdminColores.verde),
+              k('${d.totalReservas}', 'Reservas totales (${d.reservasPendientes} pend.)',
+                  Icons.event_note_outlined, AdminColores.azul),
+              k('${d.reservasConfirmadas}',
                   'Por retirar (${d.unidadesRetenidas} u. · ${formatCLP(d.montoRetenido)})',
-                  Icons.inventory_outlined),
-              _kpiCard('${d.stockBajoCount}', 'Stock bajo (≤ 3 u.)', Icons.warning_amber_rounded),
-              _kpiCard('${d.agotadosCount}', 'Productos agotados', Icons.report_outlined),
-            ],
-          ),
+                  Icons.inventory_outlined, AdminColores.ambar),
+              k('${d.stockBajoCount}', 'Stock bajo (≤ 3 u.)', Icons.warning_amber_rounded, AdminColores.ambar),
+              k('${d.agotadosCount}', 'Productos agotados', Icons.report_outlined, AdminColores.rojo),
+            ]);
+          }),
+          const SizedBox(height: 20),
+          LayoutBuilder(builder: (context, c) {
+            final totalRes = _reservas.isEmpty ? 1 : _reservas.length;
+            int n(String e) => _reservas.where((r) => r.estado == e).length;
+            final pub = d.productosPublicados == 0 ? 1 : d.productosPublicados;
+            final embudo = AdminPanel(
+              titulo: 'Embudo de reservas',
+              subtitulo: 'Cómo avanzan las solicitudes de los clientes',
+              icono: Icons.filter_alt_outlined,
+              colores: AdminColores.azul,
+              child: Column(children: [
+                BarraProgreso(etiqueta: 'Pendientes', valor: '${n('pendiente')}', fraccion: n('pendiente') / totalRes, color: const Color(0xFFF08A00)),
+                BarraProgreso(etiqueta: 'Por retirar (confirmadas)', valor: '${n('confirmada')}', fraccion: n('confirmada') / totalRes, color: const Color(0xFF1B4F8A)),
+                BarraProgreso(etiqueta: 'Entregadas', valor: '${n('entregada')}', fraccion: n('entregada') / totalRes, color: const Color(0xFF14785C)),
+                BarraProgreso(etiqueta: 'Rechazadas', valor: '${n('rechazada')}', fraccion: n('rechazada') / totalRes, color: const Color(0xFF9E1119)),
+                const SizedBox(height: 6),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                      _reservas.isEmpty
+                          ? 'Aún no hay reservas.'
+                          : 'Conversión: ${(n('entregada') * 100 / totalRes).toStringAsFixed(0)} % de las reservas terminan en venta.',
+                      style: const TextStyle(color: AppColors.steel, fontSize: 12.5)),
+                ),
+              ]),
+            );
+            final salud = AdminPanel(
+              titulo: 'Salud del inventario',
+              subtitulo: 'Sobre ${d.productosPublicados} productos publicados',
+              icono: Icons.health_and_safety_outlined,
+              colores: AdminColores.verde,
+              child: Column(children: [
+                BarraProgreso(etiqueta: 'Con stock suficiente', valor: '${(d.productosPublicados - d.agotadosCount - d.stockBajoCount).clamp(0, 1 << 30)}', fraccion: (d.productosPublicados - d.agotadosCount - d.stockBajoCount) / pub, color: const Color(0xFF14785C)),
+                BarraProgreso(etiqueta: 'Stock bajo (≤ 3)', valor: '${d.stockBajoCount}', fraccion: d.stockBajoCount / pub, color: const Color(0xFFF08A00)),
+                BarraProgreso(etiqueta: 'Agotados', valor: '${d.agotadosCount}', fraccion: d.agotadosCount / pub, color: const Color(0xFF9E1119)),
+                BarraProgreso(etiqueta: 'Sin precio', valor: '${d.sinPrecioCount}', fraccion: d.sinPrecioCount / pub, color: const Color(0xFF5A2FA0)),
+              ]),
+            );
+            if (c.maxWidth < 900) return Column(children: [embudo, const SizedBox(height: 16), salud]);
+            return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Expanded(child: embudo),
+              const SizedBox(width: 16),
+              Expanded(child: salud),
+            ]);
+          }),
           const SizedBox(height: 20),
           LayoutBuilder(builder: (context, constraints) {
             final dosColumnas = constraints.maxWidth > 800;
@@ -1306,39 +1416,58 @@ class _AdminScreenState extends State<AdminScreen> {
   }
 
   Widget _panel({required String titulo, required Widget child, double? alto}) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.paper2),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(titulo, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-          const SizedBox(height: 14),
-          SizedBox(height: alto, child: child),
-        ],
-      ),
+    final t = titulo.toLowerCase();
+    final icono = t.contains('venta') && t.contains('día')
+        ? Icons.show_chart
+        : t.contains('categor')
+            ? Icons.donut_large
+            : t.contains('demanda')
+                ? Icons.local_fire_department_outlined
+                : t.contains('sin stock')
+                    ? Icons.remove_shopping_cart_outlined
+                    : Icons.insights_outlined;
+    return AdminPanel(
+      titulo: titulo,
+      icono: icono,
+      colores: t.contains('sin stock') ? AdminColores.rojo : (t.contains('demanda') ? AdminColores.ambar : AdminColores.azul),
+      child: SizedBox(height: alto, child: child),
     );
   }
 
   Widget _sinDatos(String texto) {
-    return Center(
-      child: Text(texto, style: TextStyle(color: AppColors.steel, fontSize: 12.5)),
-    );
+    return VacioAdmin(icono: Icons.query_stats, titulo: 'Sin datos todavía', texto: texto);
   }
 
   Widget _tablaSimple({required List<String> columnas, required List<List<String>> filas}) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: DataTable(
-        columns: columnas.map((c) => DataColumn(label: Text(c))).toList(),
-        rows: filas
-            .map((fila) => DataRow(cells: fila.map((c) => DataCell(Text(c))).toList()))
-            .toList(),
-      ),
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+              color: AdminColores.fondo, borderRadius: BorderRadius.circular(12)),
+          child: Row(children: [
+            for (final c in columnas)
+              Expanded(
+                  child: Text(c.toUpperCase(),
+                      style: const TextStyle(
+                          fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.8, color: AppColors.steel))),
+          ]),
+        ),
+        for (var i = 0; i < filas.length; i++)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              border: Border(bottom: BorderSide(color: i == filas.length - 1 ? Colors.transparent : AdminColores.borde)),
+            ),
+            child: Row(children: [
+              for (final c in filas[i])
+                Expanded(
+                    child: Text(c,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: AppColors.char))),
+            ]),
+          ),
+      ],
     );
   }
 
@@ -1365,17 +1494,34 @@ class _AdminScreenState extends State<AdminScreen> {
 
   Widget _formularioVenta() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.paper2),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: AdminColores.borde),
+        boxShadow: const [BoxShadow(color: Color(0x0F000000), blurRadius: 18, offset: Offset(0, 8))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Registrar venta', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-          const SizedBox(height: 14),
+          Row(children: [
+            const InsigniaIcono(icono: Icons.point_of_sale_outlined, tam: 44, colores: AdminColores.violeta),
+            const SizedBox(width: 14),
+            const Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Registrar venta de mostrador',
+                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 17, color: AppColors.char)),
+                Text('Descuenta el stock al instante y queda reflejada en Analítica.',
+                    style: TextStyle(fontSize: 12.5, color: AppColors.steel)),
+              ]),
+            ),
+            OutlinedButton.icon(
+              onPressed: _descargarPdfVentas,
+              icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+              label: const Text('Ventas en PDF'),
+            ),
+          ]),
+          const SizedBox(height: 18),
           Wrap(
             spacing: 14,
             runSpacing: 14,
@@ -1619,20 +1765,8 @@ class _AdminScreenState extends State<AdminScreen> {
         children: [
           if (_sesion.puede('stock')) ...[
             _formularioVenta(),
-            const SizedBox(height: 16),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: OutlinedButton.icon(
-                onPressed: _descargarPdfVentas,
-                icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
-                label: const Text('Ventas en PDF'),
-              ),
-            ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 22),
           ],
-          const Text('Precio y stock',
-              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-          const SizedBox(height: 12),
           InventarioAdmin(
             key: ValueKey('inventario-stock-$_inventarioVersion'),
             editable: _sesion.puede('stock'),
@@ -1647,320 +1781,177 @@ class _AdminScreenState extends State<AdminScreen> {
   // Usuarios (roles y cuentas del panel admin)
   // ---------------------------------------------------------------
 
+  /// Recarga solo roles y usuarios (sin el spinner de pantalla completa).
+  Future<void> _usrRecargar() async {
+    try {
+      final r = await Future.wait<Object?>([
+        ApiService.instance.getRoles(),
+        ApiService.instance.getUsuariosAdmin(),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _roles = r[0] as List<Rol>;
+        _usuariosAdmin = r[1] as List<UsuarioAdmin>;
+      });
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
+  }
+
+  Future<void> _usrCambiarActivo(UsuarioAdmin u, bool activo) async {
+    try {
+      await ApiService.instance.actualizarUsuarioAdmin(u.id, activo: activo);
+      await _usrRecargar();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
+  }
+
   Widget _buildUsuariosTab() {
+    final activos = _usuariosAdmin.where((u) => u.activo).length;
+    final ancho = MediaQuery.of(context).size.width;
+    final botones = Wrap(spacing: 12, runSpacing: 10, children: [
+      ElevatedButton.icon(
+        onPressed: _roles.isEmpty ? null : () => _mostrarFormUsuario(),
+        style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 17)),
+        icon: const Icon(Icons.person_add_alt_1, size: 20),
+        label: const Text('Nuevo usuario'),
+      ),
+      ElevatedButton.icon(
+        onPressed: () => _mostrarFormRol(),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.char,
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 17),
+        ),
+        icon: const Icon(Icons.add_moderator_outlined, size: 20),
+        label: const Text('Nuevo rol'),
+      ),
+    ]);
+    final resumen = Wrap(spacing: 12, runSpacing: 10, children: [
+      UsrMiniStat('${_usuariosAdmin.length}', 'Usuarios'),
+      UsrMiniStat('$activos', 'Activos'),
+      UsrMiniStat('${_roles.length}', 'Roles'),
+    ]);
+
     return RefreshIndicator(
-      onRefresh: _cargarTodo,
+      onRefresh: _usrRecargar,
       child: ListView(
         padding: const EdgeInsets.all(24),
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Text(
-                  'Crea roles con permisos específicos y luego asigna esos roles a las '
-                  'personas de tu equipo que necesiten acceso al panel.',
-                  style: TextStyle(color: AppColors.steel, fontSize: 13, height: 1.5),
+          AdminAncho(
+            max: 2200,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                AdminHero(
+                  titulo: 'Usuarios y roles',
+                  subtitulo: 'Crea roles con permisos específicos y asígnalos a las personas de tu equipo '
+                      'que necesiten acceso al panel.',
+                  icono: Icons.admin_panel_settings_outlined,
+                  derecha: ancho >= 1300 ? resumen : null,
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              Text('Roles', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-              const Spacer(),
-              ElevatedButton.icon(
-                onPressed: () => _mostrarFormRol(),
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text('Nuevo rol'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _tablaRoles(),
-          const SizedBox(height: 30),
-          Row(
-            children: [
-              Text('Usuarios del panel',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-              const Spacer(),
-              ElevatedButton.icon(
-                onPressed: _roles.isEmpty ? null : () => _mostrarFormUsuario(),
-                icon: const Icon(Icons.person_add_alt, size: 18),
-                label: const Text('Nuevo usuario'),
-              ),
-            ],
-          ),
-          if (_roles.isEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: Text('Crea al menos un rol antes de agregar usuarios.',
-                  style: TextStyle(color: AppColors.steel, fontSize: 12)),
+                const SizedBox(height: 14),
+                if (ancho < 1300) ...[
+                  resumen,
+                  const SizedBox(height: 14),
+                ],
+                botones,
+                const SizedBox(height: 28),
+                _usrEncabezado('Usuarios del panel', '${_usuariosAdmin.length} en total · $activos activos',
+                    Icons.people_alt_outlined, AdminColores.azul),
+                if (_roles.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 12),
+                    child: CfgAviso(
+                      texto: 'Crea al menos un rol antes de agregar usuarios.',
+                      color: AppColors.warn,
+                      icono: Icons.info_outline,
+                    ),
+                  ),
+                UsrListaUsuarios(
+                  usuarios: _usuariosAdmin,
+                  roles: _roles,
+                  usuarioActual: _sesion.usuario,
+                  onEditar: (u) => _mostrarFormUsuario(usuario: u),
+                  onEliminar: _eliminarUsuario,
+                  onActivo: _usrCambiarActivo,
+                  onNuevo: _roles.isEmpty ? null : () => _mostrarFormUsuario(),
+                ),
+                const SizedBox(height: 34),
+                _usrEncabezado('Roles y permisos', 'Qué puede hacer cada rol dentro del panel',
+                    Icons.shield_outlined, AdminColores.violeta),
+                if (_roles.isEmpty)
+                  AdminPanel(
+                    child: VacioAdmin(
+                      icono: Icons.shield_outlined,
+                      titulo: 'Aún no has creado ningún rol',
+                      texto: 'Un rol agrupa los permisos (catálogo, reservas, stock…) que tendrá una persona.',
+                      accion: ElevatedButton.icon(
+                        onPressed: () => _mostrarFormRol(),
+                        icon: const Icon(Icons.add, size: 18),
+                        label: const Text('Nuevo rol'),
+                      ),
+                    ),
+                  )
+                else
+                  CfgCuadricula(
+                    minAncho: 360,
+                    maxColumnas: 4,
+                    children: [
+                      for (final r in _roles)
+                        UsrTarjetaRol(
+                          key: ValueKey('rol-${r.id}'),
+                          rol: r,
+                          usuarios: _usuariosAdmin.where((u) => u.rolId == r.id).length,
+                          onEditar: () => _mostrarFormRol(rol: r),
+                          onEliminar: () => _eliminarRol(r),
+                        ),
+                    ],
+                  ),
+                const SizedBox(height: 24),
+              ],
             ),
-          const SizedBox(height: 12),
-          _tablaUsuarios(),
+          ),
         ],
       ),
     );
   }
 
-  String _nombreRol(int rolId) {
-    final r = _roles.where((x) => x.id == rolId);
-    return r.isEmpty ? 'Rol eliminado' : r.first.nombre;
-  }
-
-  Widget _tablaRoles() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.paper2),
-      ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: DataTable(
-          dataRowMinHeight: 48,
-          dataRowMaxHeight: 96,
-          columns: const [
-            DataColumn(label: Text('Rol')),
-            DataColumn(label: Text('Permisos')),
-            DataColumn(label: Text('')),
-          ],
-          rows: _roles.isEmpty
-              ? [
-                  const DataRow(cells: [
-                    DataCell(Text('Aún no has creado ningún rol.')),
-                    DataCell(Text('')),
-                    DataCell(Text('')),
-                  ])
-                ]
-              : _roles
-                  .map((r) => DataRow(cells: [
-                        DataCell(Text(r.nombre, style: const TextStyle(fontWeight: FontWeight.w600))),
-                        DataCell(SizedBox(
-                          width: 340,
-                          child: Wrap(
-                            spacing: 6,
-                            runSpacing: 4,
-                            children: r.permisos
-                                .map((p) => Chip(
-                                      label: Text(kNombrePermiso[p] ?? p,
-                                          style: const TextStyle(fontSize: 10.5)),
-                                      visualDensity: VisualDensity.compact,
-                                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                      backgroundColor: AppColors.paper,
-                                    ))
-                                .toList(),
-                          ),
-                        )),
-                        DataCell(Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.edit_outlined, size: 18),
-                              onPressed: () => _mostrarFormRol(rol: r),
-                              tooltip: 'Editar',
-                            ),
-                            IconButton(
-                              icon: Icon(Icons.delete_outline, size: 18, color: AppColors.bad),
-                              onPressed: () => _eliminarRol(r),
-                              tooltip: 'Eliminar',
-                            ),
-                          ],
-                        )),
-                      ]))
-                  .toList(),
+  Widget _usrEncabezado(String titulo, String subtitulo, IconData icono, List<Color> colores) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Row(children: [
+        InsigniaIcono(icono: icono, tam: 40, colores: colores),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(titulo,
+                style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900, color: AppColors.char)),
+            Text(subtitulo, style: const TextStyle(fontSize: 12.5, color: AppColors.steel)),
+          ]),
         ),
-      ),
+      ]),
     );
   }
 
-  Widget _tablaUsuarios() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.paper2),
-      ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: DataTable(
-          columns: const [
-            DataColumn(label: Text('Usuario')),
-            DataColumn(label: Text('Nombre')),
-            DataColumn(label: Text('Rol')),
-            DataColumn(label: Text('Estado')),
-            DataColumn(label: Text('')),
-          ],
-          rows: _usuariosAdmin.isEmpty
-              ? [
-                  const DataRow(cells: [
-                    DataCell(Text('Aún no has creado usuarios adicionales.')),
-                    DataCell(Text('')),
-                    DataCell(Text('')),
-                    DataCell(Text('')),
-                    DataCell(Text('')),
-                  ])
-                ]
-              : _usuariosAdmin
-                  .map((u) => DataRow(cells: [
-                        DataCell(Text(u.usuario)),
-                        DataCell(Text(u.nombre.isEmpty ? '—' : u.nombre)),
-                        DataCell(Text(_nombreRol(u.rolId))),
-                        DataCell(Text(u.activo ? 'Activo' : 'Inactivo',
-                            style: TextStyle(color: u.activo ? AppColors.ok : AppColors.steel))),
-                        DataCell(Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.edit_outlined, size: 18),
-                              onPressed: () => _mostrarFormUsuario(usuario: u),
-                              tooltip: 'Editar',
-                            ),
-                            IconButton(
-                              icon: Icon(Icons.delete_outline, size: 18, color: AppColors.bad),
-                              onPressed: () => _eliminarUsuario(u),
-                              tooltip: 'Eliminar',
-                            ),
-                          ],
-                        )),
-                      ]))
-                  .toList(),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _mostrarFormRol({Rol? rol}) async {
-    final nombreCtrl = TextEditingController(text: rol?.nombre ?? '');
-    final permisosSeleccionados = <String>{...(rol?.permisos ?? [])};
-    String? error;
-    bool guardando = false;
-
-    await showDialog(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, setDialogState) => Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 420),
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(rol == null ? 'Nuevo rol' : 'Editar rol',
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: nombreCtrl,
-                      decoration: const InputDecoration(labelText: 'Nombre del rol'),
-                    ),
-                    const SizedBox(height: 14),
-                    const Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text('Permisos', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5)),
-                    ),
-                    ...kPermisosDisponibles.map((p) => CheckboxListTile(
-                          value: permisosSeleccionados.contains(p),
-                          onChanged: (v) => setDialogState(() {
-                            if (v == true) {
-                              permisosSeleccionados.add(p);
-                            } else {
-                              permisosSeleccionados.remove(p);
-                            }
-                          }),
-                          dense: true,
-                          contentPadding: EdgeInsets.zero,
-                          controlAffinity: ListTileControlAffinity.leading,
-                          title: Text(kNombrePermiso[p] ?? p, style: const TextStyle(fontSize: 13)),
-                        )),
-                    if (error != null) ...[
-                      const SizedBox(height: 6),
-                      Text(error!, style: TextStyle(color: AppColors.bad, fontSize: 12)),
-                    ],
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextButton(
-                            onPressed: () => Navigator.of(dialogContext).pop(),
-                            child: const Text('Cancelar'),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: guardando
-                                ? null
-                                : () async {
-                                    if (nombreCtrl.text.trim().isEmpty) {
-                                      setDialogState(() => error = 'El nombre es obligatorio.');
-                                      return;
-                                    }
-                                    setDialogState(() {
-                                      guardando = true;
-                                      error = null;
-                                    });
-                                    try {
-                                      if (rol == null) {
-                                        await ApiService.instance.crearRol(
-                                            nombreCtrl.text.trim(), permisosSeleccionados.toList());
-                                      } else {
-                                        await ApiService.instance.actualizarRol(
-                                            rol.id, nombreCtrl.text.trim(), permisosSeleccionados.toList());
-                                      }
-                                      if (dialogContext.mounted) Navigator.of(dialogContext).pop();
-                                      await _cargarTodo();
-                                    } catch (e) {
-                                      setDialogState(() {
-                                        guardando = false;
-                                        error = '$e';
-                                      });
-                                    }
-                                  },
-                            child: guardando
-                                ? const SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                                : const Text('Guardar'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+  Future<void> _mostrarFormRol({Rol? rol}) =>
+      mostrarDialogoRol(context, rol: rol, alGuardar: _usrRecargar);
 
   Future<void> _eliminarRol(Rol rol) async {
-    final confirmar = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Eliminar rol'),
-        content: Text('¿Eliminar el rol "${rol.nombre}"? Esta acción no se puede deshacer.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancelar')),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: Text('Eliminar', style: TextStyle(color: AppColors.bad)),
-          ),
-        ],
-      ),
+    final enUso = _usuariosAdmin.where((u) => u.rolId == rol.id).length;
+    final confirmar = await mostrarConfirmacionEliminar(
+      context,
+      titulo: 'Eliminar rol',
+      mensaje: '¿Eliminar el rol "${rol.nombre}"?',
+      detalle: enUso > 0
+          ? 'Hay $enUso ${enUso == 1 ? 'usuario' : 'usuarios'} con este rol. '
+              'Cámbiales el rol antes de eliminarlo.'
+          : null,
     );
-    if (confirmar != true) return;
+    if (!confirmar) return;
     try {
       await ApiService.instance.eliminarRol(rol.id);
-      await _cargarTodo();
+      await _usrRecargar();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
@@ -1968,168 +1959,20 @@ class _AdminScreenState extends State<AdminScreen> {
     }
   }
 
-  Future<void> _mostrarFormUsuario({UsuarioAdmin? usuario}) async {
-    final usuarioCtrl = TextEditingController(text: usuario?.usuario ?? '');
-    final nombreCtrl = TextEditingController(text: usuario?.nombre ?? '');
-    final passwordCtrl = TextEditingController();
-    int? rolSeleccionado = usuario?.rolId ?? (_roles.isNotEmpty ? _roles.first.id : null);
-    bool activo = usuario?.activo ?? true;
-    String? error;
-    bool guardando = false;
-
-    await showDialog(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, setDialogState) => Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 420),
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(usuario == null ? 'Nuevo usuario' : 'Editar usuario',
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: usuarioCtrl,
-                      enabled: usuario == null,
-                      decoration: const InputDecoration(labelText: 'Nombre de usuario'),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: nombreCtrl,
-                      decoration: const InputDecoration(labelText: 'Nombre completo (opcional)'),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: passwordCtrl,
-                      obscureText: true,
-                      decoration: InputDecoration(
-                          labelText: usuario == null ? 'Contraseña' : 'Nueva contraseña (opcional)'),
-                    ),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<int>(
-                      initialValue: rolSeleccionado,
-                      decoration: const InputDecoration(labelText: 'Rol'),
-                      items: _roles
-                          .map((r) => DropdownMenuItem(value: r.id, child: Text(r.nombre)))
-                          .toList(),
-                      onChanged: (v) => setDialogState(() => rolSeleccionado = v),
-                    ),
-                    if (usuario != null) ...[
-                      const SizedBox(height: 6),
-                      SwitchListTile(
-                        value: activo,
-                        onChanged: (v) => setDialogState(() => activo = v),
-                        contentPadding: EdgeInsets.zero,
-                        dense: true,
-                        title: const Text('Usuario activo', style: TextStyle(fontSize: 13)),
-                      ),
-                    ],
-                    if (error != null) ...[
-                      const SizedBox(height: 6),
-                      Text(error!, style: TextStyle(color: AppColors.bad, fontSize: 12)),
-                    ],
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextButton(
-                            onPressed: () => Navigator.of(dialogContext).pop(),
-                            child: const Text('Cancelar'),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: guardando
-                                ? null
-                                : () async {
-                                    if (usuarioCtrl.text.trim().isEmpty) {
-                                      setDialogState(() => error = 'El usuario es obligatorio.');
-                                      return;
-                                    }
-                                    if (usuario == null && passwordCtrl.text.isEmpty) {
-                                      setDialogState(() => error = 'La contraseña es obligatoria.');
-                                      return;
-                                    }
-                                    if (rolSeleccionado == null) {
-                                      setDialogState(() => error = 'Debes seleccionar un rol.');
-                                      return;
-                                    }
-                                    setDialogState(() {
-                                      guardando = true;
-                                      error = null;
-                                    });
-                                    try {
-                                      if (usuario == null) {
-                                        await ApiService.instance.crearUsuarioAdmin(
-                                          usuario: usuarioCtrl.text.trim(),
-                                          password: passwordCtrl.text,
-                                          rolId: rolSeleccionado!,
-                                          nombre: nombreCtrl.text.trim(),
-                                        );
-                                      } else {
-                                        await ApiService.instance.actualizarUsuarioAdmin(
-                                          usuario.id,
-                                          nombre: nombreCtrl.text.trim(),
-                                          rolId: rolSeleccionado,
-                                          password: passwordCtrl.text,
-                                          activo: activo,
-                                        );
-                                      }
-                                      if (dialogContext.mounted) Navigator.of(dialogContext).pop();
-                                      await _cargarTodo();
-                                    } catch (e) {
-                                      setDialogState(() {
-                                        guardando = false;
-                                        error = '$e';
-                                      });
-                                    }
-                                  },
-                            child: guardando
-                                ? const SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                                : const Text('Guardar'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+  Future<void> _mostrarFormUsuario({UsuarioAdmin? usuario}) =>
+      mostrarDialogoUsuario(context, usuario: usuario, roles: _roles, alGuardar: _usrRecargar);
 
   Future<void> _eliminarUsuario(UsuarioAdmin usuario) async {
-    final confirmar = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Eliminar usuario'),
-        content: Text('¿Eliminar el acceso de "${usuario.usuario}"?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancelar')),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: Text('Eliminar', style: TextStyle(color: AppColors.bad)),
-          ),
-        ],
-      ),
+    final confirmar = await mostrarConfirmacionEliminar(
+      context,
+      titulo: 'Eliminar usuario',
+      mensaje: '¿Eliminar el acceso de "${usuario.usuario}"?',
+      detalle: 'Si solo quieres suspender el acceso temporalmente, desactívalo con el interruptor de su tarjeta.',
     );
-    if (confirmar != true) return;
+    if (!confirmar) return;
     try {
       await ApiService.instance.eliminarUsuarioAdmin(usuario.id);
-      await _cargarTodo();
+      await _usrRecargar();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
@@ -2141,491 +1984,630 @@ class _AdminScreenState extends State<AdminScreen> {
   // Configuración
   // ---------------------------------------------------------------
 
+  static const _cfgSecciones = <CfgSeccionInfo>[
+    CfgSeccionInfo('portada', 'Portada', 'Título, botones y cifras', Icons.web_asset_outlined),
+    CfgSeccionInfo('marcas', 'Marcas y catálogo', 'Encabezados y buscador', Icons.sell_outlined),
+    CfgSeccionInfo('historia', 'Historia', 'Texto y datos destacados', Icons.history_edu_outlined),
+    CfgSeccionInfo('servicios', 'Servicios', 'Lo que ofreces', Icons.build_circle_outlined),
+    CfgSeccionInfo('contacto', 'Contacto y horario', 'WhatsApp, dirección y horario', Icons.contact_phone_outlined),
+    CfgSeccionInfo('legal', 'Aviso legal', 'Secciones legales', Icons.gavel_outlined),
+    CfgSeccionInfo('pie', 'Pie de página', 'Derechos de autor', Icons.vertical_align_bottom),
+    CfgSeccionInfo('notificaciones', 'Notificaciones y sincronización', 'Correo, WhatsApp y sync',
+        Icons.notifications_active_outlined),
+  ];
+
+  static const _cfgAyudas = <String, String>{
+    'portada': 'Lo primero que ven tus clientes: título, botones y cifras destacadas.',
+    'marcas': 'Encabezados de la sección de marcas y del catálogo, y el texto del buscador.',
+    'historia': 'Cuenta quién eres y destaca datos clave de tu negocio.',
+    'servicios': 'Encabezado de la sección y listado de los servicios que ofreces.',
+    'contacto': 'Cómo te encuentran los clientes: WhatsApp, correo, dirección y horario.',
+    'legal': 'Textos legales del sitio. Cada sección se muestra como un apartado.',
+    'pie': 'Texto de derechos que aparece al final de todas las páginas.',
+    'notificaciones':
+        'Comprueba que los avisos de reservas lleguen por correo y WhatsApp, y sincroniza el stock con el sistema del cliente.',
+  };
+
+  /// Secciones con cambios sin guardar (se compara con lo último guardado).
+  Set<String> _cfgModificadas() {
+    final g = SiteContent.actual;
+    final m = <String>{};
+    void c(String sec, TextEditingController ctrl, String guardado) {
+      if (ctrl.text.trim() != guardado.trim()) m.add(sec);
+    }
+
+    c('portada', _nombreNegocioCtrl, g.nombreNegocio);
+    c('portada', _heroTituloCtrl, g.heroTitulo);
+    c('portada', _heroSubtituloCtrl, g.heroSubtitulo);
+    c('portada', _heroBotonCatalogoCtrl, g.heroBotonCatalogo);
+    c('portada', _heroBotonContactoCtrl, g.heroBotonContacto);
+    c('portada', _heroEstadisticaProductosEtiquetaCtrl, g.heroEstadisticaProductosEtiqueta);
+    c('portada', _heroEstadisticaMarcasValorCtrl, g.heroEstadisticaMarcasValor);
+    c('portada', _heroEstadisticaMarcasEtiquetaCtrl, g.heroEstadisticaMarcasEtiqueta);
+    c('portada', _heroEstadisticaCategoriasValorCtrl, g.heroEstadisticaCategoriasValor);
+    c('portada', _heroEstadisticaCategoriasEtiquetaCtrl, g.heroEstadisticaCategoriasEtiqueta);
+    c('marcas', _catalogoKickerCtrl, g.catalogoKicker);
+    c('marcas', _catalogoTituloCtrl, g.catalogoTitulo);
+    c('marcas', _marcasTituloCtrl, g.marcasTitulo);
+    c('marcas', _marcasSubtituloCtrl, g.marcasSubtitulo);
+    c('marcas', _catalogoBusquedaHintCtrl, g.catalogoBusquedaHint);
+    c('historia', _historiaKickerCtrl, g.historiaKicker);
+    c('historia', _historiaTituloCtrl, g.historiaTitulo);
+    c('historia', _historiaTextoCtrl, g.historiaTexto);
+    if (!cfgJsonIgual(_contenidoEdit.historiaFichas.map((f) => f.toJson()).toList(),
+        g.historiaFichas.map((f) => f.toJson()).toList())) {
+      m.add('historia');
+    }
+    c('servicios', _serviciosKickerCtrl, g.serviciosKicker);
+    c('servicios', _serviciosTituloCtrl, g.serviciosTitulo);
+    if (!cfgJsonIgual(_contenidoEdit.servicios.map((s) => s.toJson()).toList(),
+        g.servicios.map((s) => s.toJson()).toList())) {
+      m.add('servicios');
+    }
+    c('contacto', _contactoKickerCtrl, g.contactoKicker);
+    c('contacto', _contactoTituloCtrl, g.contactoTitulo);
+    c('contacto', _contactoWhatsappCtrl, g.contactoWhatsapp);
+    c('contacto', _contactoEmailCtrl, g.contactoEmail);
+    c('contacto', _contactoDireccionCtrl, g.contactoDireccion);
+    c('contacto', _contactoMapsUrlCtrl, g.contactoMapsUrl);
+    c('contacto', _contactoHorarioCtrl, g.contactoHorario);
+    c('legal', _avisoLegalActualizadoCtrl, g.avisoLegalActualizado);
+    if (!cfgJsonIgual(_contenidoEdit.avisoLegalSecciones.map((s) => s.toJson()).toList(),
+        g.avisoLegalSecciones.map((s) => s.toJson()).toList())) {
+      m.add('legal');
+    }
+    c('pie', _footerDerechosCtrl, g.footerDerechos);
+    return m;
+  }
+
+  Future<void> _cfgDescartar() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Descartar cambios'),
+        content: const Text('Se perderán los cambios que no hayas guardado y se volverá al último contenido guardado.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Seguir editando')),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text('Descartar', style: TextStyle(color: AppColors.bad)),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    setState(() {
+      _contenidoEdit = SiteContent.actual.copiaProfunda();
+      _sincronizarControladoresContenido();
+      _resultadoContenido = null;
+    });
+  }
+
   Widget _buildConfiguracionTab() {
+    final angosto = MediaQuery.of(context).size.width < 1100;
+    return AnimatedBuilder(
+      animation: _cfgCambios,
+      builder: (context, _) {
+        final mod = _cfgModificadas();
+        final nav = CfgNavegacion(
+          secciones: _cfgSecciones,
+          activa: _cfgSeccion,
+          modificadas: mod,
+          horizontal: angosto,
+          onSeleccionar: (c) => setState(() => _cfgSeccion = c),
+        );
+        return Column(children: [
+          CfgBarraGuardar(
+            hayCambios: mod.isNotEmpty,
+            guardando: _guardandoContenido,
+            seccionesModificadas: mod.length,
+            mensaje: _resultadoContenido,
+            mensajeEsError: _resultadoContenidoEsError,
+            onGuardar: _guardarContenido,
+            onDescartar: _cfgDescartar,
+          ),
+          if (angosto) Material(color: Colors.white, child: nav),
+          Expanded(
+            child: angosto
+                ? _cfgContenido()
+                : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    SizedBox(
+                      width: 300,
+                      child: SingleChildScrollView(padding: const EdgeInsets.fromLTRB(24, 24, 0, 24), child: nav),
+                    ),
+                    Expanded(child: _cfgContenido()),
+                  ]),
+          ),
+        ]);
+      },
+    );
+  }
+
+  Widget _cfgContenido() {
+    final info = _cfgSecciones.firstWhere((s) => s.clave == _cfgSeccion, orElse: () => _cfgSecciones.first);
+    final List<Widget> hijos;
+    switch (info.clave) {
+      case 'marcas':
+        hijos = _cfgMarcas();
+      case 'historia':
+        hijos = _cfgHistoria();
+      case 'servicios':
+        hijos = _cfgServicios();
+      case 'contacto':
+        hijos = _cfgContacto();
+      case 'legal':
+        hijos = _cfgLegal();
+      case 'pie':
+        hijos = _cfgPie();
+      case 'notificaciones':
+        hijos = [
+          NotificacionesSyncPanel(
+            verNotificaciones: _sesion.puede('configuracion'),
+            verSincronizacion: _sesion.puede('stock'),
+          ),
+        ];
+      default:
+        hijos = _cfgPortada();
+    }
     return ListView(
+      key: PageStorageKey('cfg-${info.clave}'),
       padding: const EdgeInsets.all(24),
       children: [
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: AppColors.paper2,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Icon(Icons.info_outline, size: 18, color: AppColors.steel),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Edita aquí el contenido que ven tus clientes en el sitio público: '
-                  'historia, servicios, contacto y aviso legal. Los cambios se aplican '
-                  'de inmediato al guardar.',
-                  style: TextStyle(color: AppColors.steel, fontSize: 12.5, height: 1.5),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            ElevatedButton.icon(
-              onPressed: _guardandoContenido ? null : _guardarContenido,
-              icon: _guardandoContenido
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : const Icon(Icons.save_outlined, size: 18),
-              label: const Text('Guardar todos los cambios'),
-            ),
-            if (_resultadoContenido != null) ...[
+        AdminAncho(
+          max: 1500,
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Row(children: [
+              InsigniaIcono(icono: info.icono, tam: 50),
               const SizedBox(width: 14),
               Expanded(
-                child: Text(_resultadoContenido!,
-                    style: TextStyle(
-                        color: _resultadoContenidoEsError ? AppColors.bad : AppColors.ok,
-                        fontSize: 12.5)),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(info.etiqueta,
+                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: AppColors.char)),
+                  Text(_cfgAyudas[info.clave] ?? '',
+                      style: const TextStyle(fontSize: 13, color: AppColors.steel, height: 1.4)),
+                ]),
               ),
-            ],
-          ],
+            ]),
+            const SizedBox(height: 20),
+            ...hijos,
+            const SizedBox(height: 20),
+          ]),
         ),
-        const SizedBox(height: 20),
-
-        // ---------- Textos generales / Portada (Hero) ----------
-        _panel(
-          titulo: 'Textos generales y portada (Hero)',
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              TextField(
-                controller: _nombreNegocioCtrl,
-                decoration: const InputDecoration(labelText: 'Nombre del negocio'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _heroTituloCtrl,
-                decoration: const InputDecoration(
-                    labelText: 'Título principal (portada)',
-                    helperText: 'Usa un salto de línea para partirlo en dos líneas'),
-                maxLines: 2,
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _heroSubtituloCtrl,
-                decoration: const InputDecoration(labelText: 'Subtítulo (portada)'),
-                maxLines: 3,
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _heroBotonCatalogoCtrl,
-                      decoration: const InputDecoration(labelText: 'Texto botón "Ver catálogo"'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: TextField(
-                      controller: _heroBotonContactoCtrl,
-                      decoration: const InputDecoration(labelText: 'Texto botón "Contáctanos"'),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              const Text('Estadísticas de la portada',
-                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _heroEstadisticaProductosEtiquetaCtrl,
-                decoration: const InputDecoration(
-                    labelText: 'Etiqueta de productos (el número se calcula solo)'),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _heroEstadisticaMarcasValorCtrl,
-                      decoration: const InputDecoration(labelText: 'Valor (marcas)'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    flex: 2,
-                    child: TextField(
-                      controller: _heroEstadisticaMarcasEtiquetaCtrl,
-                      decoration: const InputDecoration(labelText: 'Etiqueta (marcas)'),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _heroEstadisticaCategoriasValorCtrl,
-                      decoration: const InputDecoration(labelText: 'Valor (categorías)'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    flex: 2,
-                    child: TextField(
-                      controller: _heroEstadisticaCategoriasEtiquetaCtrl,
-                      decoration: const InputDecoration(labelText: 'Etiqueta (categorías)'),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        // ---------- Encabezados de sección ----------
-        _panel(
-          titulo: 'Encabezados de sección',
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              TextField(
-                controller: _historiaKickerCtrl,
-                decoration: const InputDecoration(labelText: 'Kicker de "Historia"'),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _serviciosKickerCtrl,
-                      decoration: const InputDecoration(labelText: 'Kicker de "Servicios"'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: TextField(
-                      controller: _serviciosTituloCtrl,
-                      decoration: const InputDecoration(labelText: 'Título de "Servicios"'),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _catalogoKickerCtrl,
-                      decoration: const InputDecoration(labelText: 'Kicker de "Catálogo"'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: TextField(
-                      controller: _catalogoTituloCtrl,
-                      decoration: const InputDecoration(labelText: 'Título de "Catálogo"'),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _marcasTituloCtrl,
-                decoration: const InputDecoration(labelText: 'Título de la sección de marcas'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _marcasSubtituloCtrl,
-                decoration: const InputDecoration(labelText: 'Subtítulo de la sección de marcas'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _catalogoBusquedaHintCtrl,
-                decoration: const InputDecoration(labelText: 'Texto de ayuda del buscador'),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _contactoKickerCtrl,
-                      decoration: const InputDecoration(labelText: 'Kicker de "Contacto"'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: TextField(
-                      controller: _contactoTituloCtrl,
-                      decoration: const InputDecoration(labelText: 'Título de "Contacto"'),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _footerDerechosCtrl,
-                decoration: const InputDecoration(
-                    labelText: 'Texto de derechos en el pie de página',
-                    helperText: 'Se muestra como: © 2026 <este texto>'),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        // ---------- Historia ----------
-        _panel(
-          titulo: 'Historia de la empresa',
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              TextField(
-                controller: _historiaTituloCtrl,
-                decoration: const InputDecoration(labelText: 'Título'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _historiaTextoCtrl,
-                decoration: const InputDecoration(labelText: 'Texto'),
-                maxLines: 5,
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  const Text('Datos destacados (fichas)',
-                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-                  const Spacer(),
-                  TextButton.icon(
-                    onPressed: () => _mostrarFormFicha(),
-                    icon: const Icon(Icons.add, size: 16),
-                    label: const Text('Agregar'),
-                  ),
-                ],
-              ),
-              ..._contenidoEdit.historiaFichas.asMap().entries.map((entrada) {
-                final i = entrada.key;
-                final f = entrada.value;
-                return ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  dense: true,
-                  title: Text(f.etiqueta, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                  subtitle: Text(f.valor, style: const TextStyle(fontSize: 12.5)),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.edit_outlined, size: 18),
-                        onPressed: () => _mostrarFormFicha(indice: i),
-                      ),
-                      IconButton(
-                        icon: Icon(Icons.delete_outline, size: 18, color: AppColors.bad),
-                        onPressed: () => setState(() => _contenidoEdit.historiaFichas.removeAt(i)),
-                      ),
-                    ],
-                  ),
-                );
-              }),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        // ---------- Servicios ----------
-        _panel(
-          titulo: 'Servicios',
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text('Lo que se muestra en la sección "Servicios" del sitio.',
-                        style: TextStyle(color: AppColors.steel, fontSize: 12.5)),
-                  ),
-                  TextButton.icon(
-                    onPressed: () => _mostrarFormServicio(),
-                    icon: const Icon(Icons.add, size: 16),
-                    label: const Text('Agregar'),
-                  ),
-                ],
-              ),
-              ..._contenidoEdit.servicios.asMap().entries.map((entrada) {
-                final i = entrada.key;
-                final s = entrada.value;
-                return ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  dense: true,
-                  title: Text(s.titulo, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                  subtitle: Text(s.descripcion, style: const TextStyle(fontSize: 12.5)),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.edit_outlined, size: 18),
-                        onPressed: () => _mostrarFormServicio(indice: i),
-                      ),
-                      IconButton(
-                        icon: Icon(Icons.delete_outline, size: 18, color: AppColors.bad),
-                        onPressed: () => setState(() => _contenidoEdit.servicios.removeAt(i)),
-                      ),
-                    ],
-                  ),
-                );
-              }),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        // ---------- Contacto ----------
-        _panel(
-          titulo: 'Datos de contacto',
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              TextField(
-                controller: _contactoWhatsappCtrl,
-                decoration: const InputDecoration(
-                    labelText: 'WhatsApp (solo números, con código de país)',
-                    hintText: '56912345678'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _contactoEmailCtrl,
-                decoration: const InputDecoration(labelText: 'Correo de contacto'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _contactoDireccionCtrl,
-                decoration: const InputDecoration(labelText: 'Dirección'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _contactoMapsUrlCtrl,
-                decoration: const InputDecoration(labelText: 'Enlace de Google Maps'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _contactoHorarioCtrl,
-                decoration: const InputDecoration(labelText: 'Horario de atención'),
-                maxLines: 2,
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        // ---------- Aviso legal ----------
-        _panel(
-          titulo: 'Aviso legal',
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              TextField(
-                controller: _avisoLegalActualizadoCtrl,
-                decoration: const InputDecoration(
-                    labelText: 'Fecha de última actualización', hintText: 'septiembre de 2026'),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  const Text('Secciones', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-                  const Spacer(),
-                  TextButton.icon(
-                    onPressed: () => _mostrarFormSeccionLegal(),
-                    icon: const Icon(Icons.add, size: 16),
-                    label: const Text('Agregar sección'),
-                  ),
-                ],
-              ),
-              ..._contenidoEdit.avisoLegalSecciones.asMap().entries.map((entrada) {
-                final i = entrada.key;
-                final s = entrada.value;
-                return ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  dense: true,
-                  title: Text(s.titulo, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                  subtitle: Text(s.texto,
-                      maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12.5)),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.edit_outlined, size: 18),
-                        onPressed: () => _mostrarFormSeccionLegal(indice: i),
-                      ),
-                      IconButton(
-                        icon: Icon(Icons.delete_outline, size: 18, color: AppColors.bad),
-                        onPressed: () =>
-                            setState(() => _contenidoEdit.avisoLegalSecciones.removeAt(i)),
-                      ),
-                    ],
-                  ),
-                );
-              }),
-            ],
-          ),
-        ),
-        const SizedBox(height: 24),
-        Center(
-          child: ElevatedButton.icon(
-            onPressed: _guardandoContenido ? null : _guardarContenido,
-            icon: _guardandoContenido
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                : const Icon(Icons.save_outlined, size: 18),
-            label: const Text('Guardar todos los cambios'),
-          ),
-        ),
-        const SizedBox(height: 20),
       ],
     );
   }
 
-  Future<void> _mostrarFormFicha({int? indice}) async {
-    final existente = indice != null ? _contenidoEdit.historiaFichas[indice] : null;
-    final etiquetaCtrl = TextEditingController(text: existente?.etiqueta ?? '');
-    final valorCtrl = TextEditingController(text: existente?.valor ?? '');
-
-    final guardar = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(indice == null ? 'Nueva ficha' : 'Editar ficha'),
-        content: SizedBox(
-          width: 360,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: etiquetaCtrl,
-                decoration: const InputDecoration(labelText: 'Etiqueta', hintText: 'Ej: Ubicación'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: valorCtrl,
-                decoration: const InputDecoration(labelText: 'Valor'),
-              ),
-            ],
+  List<Widget> _cfgPortada() => [
+        CfgDosColumnas(
+          izquierda: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            AdminPanel(
+              titulo: 'Textos principales',
+              subtitulo: 'Lo primero que ve el cliente al entrar al sitio',
+              icono: Icons.title,
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                CfgCampo(
+                  controller: _nombreNegocioCtrl,
+                  etiqueta: 'Nombre del negocio',
+                  ayuda: 'Se muestra en el encabezado, la portada y el pie de página.',
+                  icono: Icons.storefront_outlined,
+                ),
+                const SizedBox(height: 14),
+                CfgCampo(
+                  controller: _heroTituloCtrl,
+                  etiqueta: 'Título principal',
+                  ayuda: 'Usa un salto de línea (Enter) para partirlo en dos líneas.',
+                  maxLines: 2,
+                  minLines: 2,
+                ),
+                const SizedBox(height: 14),
+                CfgCampo(
+                  controller: _heroSubtituloCtrl,
+                  etiqueta: 'Subtítulo',
+                  ayuda: 'Una o dos frases que resuman lo que ofreces.',
+                  maxLines: 3,
+                  minLines: 2,
+                ),
+              ]),
+            ),
+            const SizedBox(height: 18),
+            AdminPanel(
+              titulo: 'Botones de la portada',
+              subtitulo: 'Los dos accesos grandes bajo el título',
+              icono: Icons.smart_button_outlined,
+              colores: AdminColores.azul,
+              child: CfgFila(children: [
+                CfgCampo(
+                  controller: _heroBotonCatalogoCtrl,
+                  etiqueta: 'Texto del botón «Ver catálogo»',
+                  ayuda: 'Lleva al catálogo de productos.',
+                  icono: Icons.grid_view_outlined,
+                ),
+                CfgCampo(
+                  controller: _heroBotonContactoCtrl,
+                  etiqueta: 'Texto del botón «Contáctanos»',
+                  ayuda: 'Lleva a la sección de contacto.',
+                  icono: Icons.chat_bubble_outline,
+                ),
+              ]),
+            ),
+            const SizedBox(height: 18),
+            AdminPanel(
+              titulo: 'Estadísticas de la portada',
+              subtitulo: 'Tres cifras que transmiten confianza',
+              icono: Icons.bar_chart,
+              colores: AdminColores.verde,
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                CfgCampo(
+                  controller: _heroEstadisticaProductosEtiquetaCtrl,
+                  etiqueta: 'Etiqueta de productos',
+                  ayuda: 'El número se calcula solo a partir del catálogo.',
+                  icono: Icons.inventory_2_outlined,
+                ),
+                const SizedBox(height: 14),
+                CfgFila(flex: const [1, 2], children: [
+                  CfgCampo(
+                    controller: _heroEstadisticaMarcasValorCtrl,
+                    etiqueta: 'Valor (marcas)',
+                    ayuda: 'Ej.: 46',
+                  ),
+                  CfgCampo(
+                    controller: _heroEstadisticaMarcasEtiquetaCtrl,
+                    etiqueta: 'Etiqueta (marcas)',
+                    ayuda: 'Ej.: Marcas disponibles',
+                  ),
+                ]),
+                const SizedBox(height: 14),
+                CfgFila(flex: const [1, 2], children: [
+                  CfgCampo(
+                    controller: _heroEstadisticaCategoriasValorCtrl,
+                    etiqueta: 'Valor (categorías)',
+                    ayuda: 'Ej.: 130',
+                  ),
+                  CfgCampo(
+                    controller: _heroEstadisticaCategoriasEtiquetaCtrl,
+                    etiqueta: 'Etiqueta (categorías)',
+                    ayuda: 'Ej.: Categorías',
+                  ),
+                ]),
+              ]),
+            ),
+          ]),
+          derecha: CfgVistaPrevia(
+            ayuda: 'Se actualiza mientras escribes',
+            child: CfgPreviewHero(
+              nombre: _nombreNegocioCtrl,
+              titulo: _heroTituloCtrl,
+              subtitulo: _heroSubtituloCtrl,
+              botonCatalogo: _heroBotonCatalogoCtrl,
+              botonContacto: _heroBotonContactoCtrl,
+              productosEtiqueta: _heroEstadisticaProductosEtiquetaCtrl,
+              marcasValor: _heroEstadisticaMarcasValorCtrl,
+              marcasEtiqueta: _heroEstadisticaMarcasEtiquetaCtrl,
+              categoriasValor: _heroEstadisticaCategoriasValorCtrl,
+              categoriasEtiqueta: _heroEstadisticaCategoriasEtiquetaCtrl,
+            ),
           ),
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(dialogContext).pop(false), child: const Text('Cancelar')),
-          ElevatedButton(onPressed: () => Navigator.of(dialogContext).pop(true), child: const Text('Guardar')),
-        ],
-      ),
-    );
+      ];
 
-    if (guardar != true) return;
-    if (etiquetaCtrl.text.trim().isEmpty || valorCtrl.text.trim().isEmpty) return;
+  List<Widget> _cfgMarcas() => [
+        AdminPanel(
+          titulo: 'Sección de marcas',
+          subtitulo: 'El bloque con los logotipos de las marcas con las que trabajas',
+          icono: Icons.sell_outlined,
+          colores: AdminColores.ambar,
+          child: CfgFila(flex: const [1, 1], children: [
+            CfgCampo(
+              controller: _marcasTituloCtrl,
+              etiqueta: 'Título',
+              ayuda: 'Pregunta o frase que invita a buscar por marca.',
+              maxLines: 2,
+              minLines: 2,
+            ),
+            CfgCampo(
+              controller: _marcasSubtituloCtrl,
+              etiqueta: 'Subtítulo',
+              ayuda: 'Explica qué pasa al tocar una marca.',
+              maxLines: 2,
+              minLines: 2,
+            ),
+          ]),
+        ),
+        const SizedBox(height: 18),
+        AdminPanel(
+          titulo: 'Catálogo',
+          subtitulo: 'Encabezado de la sección y buscador',
+          icono: Icons.grid_view_outlined,
+          colores: AdminColores.azul,
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            CfgFila(children: [
+              CfgCampo(
+                controller: _catalogoKickerCtrl,
+                etiqueta: 'Kicker del catálogo',
+                ayuda: 'La etiqueta pequeña sobre el título. Ej.: CATÁLOGO',
+              ),
+              CfgCampo(
+                controller: _catalogoTituloCtrl,
+                etiqueta: 'Título del catálogo',
+                ayuda: 'El título grande de la sección.',
+              ),
+            ]),
+            const SizedBox(height: 14),
+            CfgCampo(
+              controller: _catalogoBusquedaHintCtrl,
+              etiqueta: 'Texto de ayuda del buscador',
+              ayuda: 'Lo que aparece dentro de la caja de búsqueda antes de escribir.',
+              icono: Icons.search,
+            ),
+          ]),
+        ),
+      ];
+
+  List<Widget> _cfgHistoria() => [
+        AdminPanel(
+          titulo: 'Texto de la historia',
+          subtitulo: 'Presenta tu negocio',
+          icono: Icons.history_edu_outlined,
+          colores: AdminColores.violeta,
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            CfgFila(flex: const [1, 2], children: [
+              CfgCampo(
+                controller: _historiaKickerCtrl,
+                etiqueta: 'Kicker',
+                ayuda: 'Etiqueta pequeña sobre el título. Ej.: NUESTRA HISTORIA',
+              ),
+              CfgCampo(
+                controller: _historiaTituloCtrl,
+                etiqueta: 'Título',
+                ayuda: 'El título grande de la sección.',
+              ),
+            ]),
+            const SizedBox(height: 14),
+            CfgCampo(
+              controller: _historiaTextoCtrl,
+              etiqueta: 'Texto',
+              ayuda: 'Cuenta tu historia con tus palabras. Puedes usar varios párrafos.',
+              maxLines: 8,
+              minLines: 5,
+            ),
+          ]),
+        ),
+        const SizedBox(height: 18),
+        AdminPanel(
+          titulo: 'Datos destacados',
+          subtitulo: 'Fichas cortas junto a la historia (ubicación, años de experiencia…)',
+          icono: Icons.badge_outlined,
+          colores: AdminColores.azul,
+          accion: ElevatedButton.icon(
+            onPressed: () => _mostrarFormFicha(),
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('Agregar ficha'),
+          ),
+          child: _contenidoEdit.historiaFichas.isEmpty
+              ? const CfgListaVacia('Aún no hay fichas. Agrega la primera con «Agregar ficha».',
+                  icono: Icons.badge_outlined)
+              : CfgCuadricula(minAncho: 420, maxColumnas: 2, espacio: 12, children: [
+                  for (final e in _contenidoEdit.historiaFichas.asMap().entries)
+                    CfgItemLista(
+                      icono: Icons.badge_outlined,
+                      titulo: e.value.etiqueta,
+                      subtitulo: e.value.valor,
+                      onEditar: () => _mostrarFormFicha(indice: e.key),
+                      onEliminar: () => setState(() => _contenidoEdit.historiaFichas.removeAt(e.key)),
+                    ),
+                ]),
+        ),
+      ];
+
+  List<Widget> _cfgServicios() => [
+        AdminPanel(
+          titulo: 'Encabezado de la sección',
+          icono: Icons.title,
+          colores: AdminColores.verde,
+          child: CfgFila(children: [
+            CfgCampo(
+              controller: _serviciosKickerCtrl,
+              etiqueta: 'Kicker',
+              ayuda: 'Etiqueta pequeña sobre el título. Ej.: SERVICIOS',
+            ),
+            CfgCampo(
+              controller: _serviciosTituloCtrl,
+              etiqueta: 'Título',
+              ayuda: 'El título grande de la sección.',
+            ),
+          ]),
+        ),
+        const SizedBox(height: 18),
+        AdminPanel(
+          titulo: 'Servicios',
+          subtitulo: 'Lo que se muestra en la sección «Servicios» del sitio',
+          icono: Icons.build_circle_outlined,
+          colores: AdminColores.verde,
+          accion: ElevatedButton.icon(
+            onPressed: () => _mostrarFormServicio(),
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('Agregar servicio'),
+          ),
+          child: _contenidoEdit.servicios.isEmpty
+              ? const CfgListaVacia('Aún no hay servicios. Agrega el primero con «Agregar servicio».',
+                  icono: Icons.build_circle_outlined)
+              : CfgCuadricula(minAncho: 420, maxColumnas: 2, espacio: 12, children: [
+                  for (final e in _contenidoEdit.servicios.asMap().entries)
+                    CfgItemLista(
+                      icono: Icons.build_outlined,
+                      colores: AdminColores.verde,
+                      titulo: e.value.titulo,
+                      subtitulo: e.value.descripcion,
+                      onEditar: () => _mostrarFormServicio(indice: e.key),
+                      onEliminar: () => setState(() => _contenidoEdit.servicios.removeAt(e.key)),
+                    ),
+                ]),
+        ),
+      ];
+
+  List<Widget> _cfgContacto() => [
+        CfgDosColumnas(
+          izquierda: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            AdminPanel(
+              titulo: 'Encabezado de la sección',
+              icono: Icons.title,
+              colores: AdminColores.azul,
+              child: CfgFila(children: [
+                CfgCampo(
+                  controller: _contactoKickerCtrl,
+                  etiqueta: 'Kicker',
+                  ayuda: 'Etiqueta pequeña sobre el título. Ej.: CONTACTO',
+                ),
+                CfgCampo(
+                  controller: _contactoTituloCtrl,
+                  etiqueta: 'Título',
+                  ayuda: 'El título grande de la sección.',
+                ),
+              ]),
+            ),
+            const SizedBox(height: 18),
+            AdminPanel(
+              titulo: 'Datos de contacto',
+              subtitulo: 'Por aquí te escriben tus clientes',
+              icono: Icons.contact_phone_outlined,
+              colores: AdminColores.verde,
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                CfgFila(children: [
+                  CfgCampo(
+                    controller: _contactoWhatsappCtrl,
+                    etiqueta: 'WhatsApp',
+                    hint: '56912345678',
+                    ayuda: 'Solo números, con código de país y sin «+».',
+                    icono: Icons.phone_outlined,
+                    teclado: TextInputType.phone,
+                  ),
+                  CfgCampo(
+                    controller: _contactoEmailCtrl,
+                    etiqueta: 'Correo de contacto',
+                    ayuda: 'Es el correo que ven tus clientes en el sitio.',
+                    icono: Icons.mail_outline,
+                    teclado: TextInputType.emailAddress,
+                  ),
+                ]),
+                const SizedBox(height: 14),
+                CfgCampo(
+                  controller: _contactoDireccionCtrl,
+                  etiqueta: 'Dirección',
+                  ayuda: 'Calle, número y ciudad.',
+                  icono: Icons.place_outlined,
+                ),
+                const SizedBox(height: 14),
+                CfgCampo(
+                  controller: _contactoMapsUrlCtrl,
+                  etiqueta: 'Enlace de Google Maps',
+                  ayuda: 'En Google Maps usa «Compartir» → «Copiar enlace» y pégalo aquí.',
+                  icono: Icons.map_outlined,
+                  teclado: TextInputType.url,
+                ),
+              ]),
+            ),
+            const SizedBox(height: 18),
+            AdminPanel(
+              titulo: 'Horario de atención',
+              icono: Icons.schedule,
+              colores: AdminColores.ambar,
+              child: CfgCampo(
+                controller: _contactoHorarioCtrl,
+                etiqueta: 'Horario',
+                ayuda: 'Una línea por tramo. Ej.: Lunes a viernes, 9:30 – 19:00',
+                maxLines: 4,
+                minLines: 2,
+              ),
+            ),
+          ]),
+          derecha: CfgVistaPrevia(
+            child: CfgPreviewContacto(
+              horario: _contactoHorarioCtrl,
+              direccion: _contactoDireccionCtrl,
+              whatsapp: _contactoWhatsappCtrl,
+              email: _contactoEmailCtrl,
+            ),
+          ),
+        ),
+      ];
+
+  List<Widget> _cfgLegal() => [
+        AdminPanel(
+          titulo: 'Fecha de actualización',
+          icono: Icons.event_outlined,
+          colores: AdminColores.violeta,
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: CfgCampo(
+                controller: _avisoLegalActualizadoCtrl,
+                etiqueta: 'Última actualización',
+                hint: 'septiembre de 2026',
+                ayuda: 'Se muestra al inicio del aviso legal.',
+                icono: Icons.event_outlined,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 18),
+        AdminPanel(
+          titulo: 'Secciones del aviso legal',
+          subtitulo: 'Cada una aparece como un apartado con su título y texto',
+          icono: Icons.gavel_outlined,
+          colores: AdminColores.violeta,
+          accion: ElevatedButton.icon(
+            onPressed: () => _mostrarFormSeccionLegal(),
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('Agregar sección'),
+          ),
+          child: _contenidoEdit.avisoLegalSecciones.isEmpty
+              ? const CfgListaVacia('Aún no hay secciones. Agrega la primera con «Agregar sección».',
+                  icono: Icons.gavel_outlined)
+              : Column(children: [
+                  for (final e in _contenidoEdit.avisoLegalSecciones.asMap().entries)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: CfgItemLista(
+                        icono: Icons.description_outlined,
+                        colores: AdminColores.violeta,
+                        titulo: e.value.titulo,
+                        subtitulo: e.value.items.isEmpty
+                            ? e.value.texto
+                            : '${e.value.texto}\n${e.value.items.length} puntos en lista',
+                        onEditar: () => _mostrarFormSeccionLegal(indice: e.key),
+                        onEliminar: () => setState(() => _contenidoEdit.avisoLegalSecciones.removeAt(e.key)),
+                      ),
+                    ),
+                ]),
+        ),
+      ];
+
+  List<Widget> _cfgPie() => [
+        CfgDosColumnas(
+          izquierda: AdminPanel(
+            titulo: 'Derechos de autor',
+            subtitulo: 'La línea final de todas las páginas',
+            icono: Icons.copyright,
+            colores: AdminColores.gris,
+            child: CfgCampo(
+              controller: _footerDerechosCtrl,
+              etiqueta: 'Texto de derechos',
+              ayuda: 'Se muestra como: © ${DateTime.now().year} <este texto>',
+              icono: Icons.copyright,
+            ),
+          ),
+          derecha: CfgVistaPrevia(
+            child: CfgPreviewPie(derechos: _footerDerechosCtrl, nombre: _nombreNegocioCtrl),
+          ),
+        ),
+      ];
+
+  Future<void> _mostrarFormFicha({int? indice}) async {
+    final existente = indice != null ? _contenidoEdit.historiaFichas[indice] : null;
+    final ficha = await mostrarDialogoFicha(context, existente: existente);
+    if (ficha == null || !mounted) return;
     setState(() {
-      final ficha = FichaHistoria(etiqueta: etiquetaCtrl.text.trim(), valor: valorCtrl.text.trim());
       if (indice == null) {
         _contenidoEdit.historiaFichas.add(ficha);
       } else {
@@ -2636,43 +2618,9 @@ class _AdminScreenState extends State<AdminScreen> {
 
   Future<void> _mostrarFormServicio({int? indice}) async {
     final existente = indice != null ? _contenidoEdit.servicios[indice] : null;
-    final tituloCtrl = TextEditingController(text: existente?.titulo ?? '');
-    final descripcionCtrl = TextEditingController(text: existente?.descripcion ?? '');
-
-    final guardar = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(indice == null ? 'Nuevo servicio' : 'Editar servicio'),
-        content: SizedBox(
-          width: 360,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: tituloCtrl,
-                decoration: const InputDecoration(labelText: 'Título'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: descripcionCtrl,
-                decoration: const InputDecoration(labelText: 'Descripción'),
-                maxLines: 3,
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(dialogContext).pop(false), child: const Text('Cancelar')),
-          ElevatedButton(onPressed: () => Navigator.of(dialogContext).pop(true), child: const Text('Guardar')),
-        ],
-      ),
-    );
-
-    if (guardar != true) return;
-    if (tituloCtrl.text.trim().isEmpty) return;
+    final servicio = await mostrarDialogoServicio(context, existente: existente);
+    if (servicio == null || !mounted) return;
     setState(() {
-      final servicio =
-          ServicioItem(titulo: tituloCtrl.text.trim(), descripcion: descripcionCtrl.text.trim());
       if (indice == null) {
         _contenidoEdit.servicios.add(servicio);
       } else {
@@ -2683,61 +2631,9 @@ class _AdminScreenState extends State<AdminScreen> {
 
   Future<void> _mostrarFormSeccionLegal({int? indice}) async {
     final existente = indice != null ? _contenidoEdit.avisoLegalSecciones[indice] : null;
-    final tituloCtrl = TextEditingController(text: existente?.titulo ?? '');
-    final textoCtrl = TextEditingController(text: existente?.texto ?? '');
-    final itemsCtrl = TextEditingController(text: (existente?.items ?? []).join('\n'));
-
-    final guardar = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(indice == null ? 'Nueva sección' : 'Editar sección'),
-        content: SizedBox(
-          width: 420,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: tituloCtrl,
-                  decoration: const InputDecoration(labelText: 'Título', hintText: 'Ej: 4. Uso del sitio'),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: textoCtrl,
-                  decoration: const InputDecoration(labelText: 'Texto'),
-                  maxLines: 5,
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: itemsCtrl,
-                  decoration: const InputDecoration(
-                      labelText: 'Puntos en lista (opcional, uno por línea)'),
-                  maxLines: 4,
-                ),
-              ],
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(dialogContext).pop(false), child: const Text('Cancelar')),
-          ElevatedButton(onPressed: () => Navigator.of(dialogContext).pop(true), child: const Text('Guardar')),
-        ],
-      ),
-    );
-
-    if (guardar != true) return;
-    if (tituloCtrl.text.trim().isEmpty) return;
+    final seccion = await mostrarDialogoSeccionLegal(context, existente: existente);
+    if (seccion == null || !mounted) return;
     setState(() {
-      final items = itemsCtrl.text
-          .split('\n')
-          .map((l) => l.trim())
-          .where((l) => l.isNotEmpty)
-          .toList();
-      final seccion = SeccionLegal(
-        titulo: tituloCtrl.text.trim(),
-        texto: textoCtrl.text.trim(),
-        items: items,
-      );
       if (indice == null) {
         _contenidoEdit.avisoLegalSecciones.add(seccion);
       } else {

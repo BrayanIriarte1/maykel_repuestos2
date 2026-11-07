@@ -32,6 +32,27 @@ class HoverLift extends StatefulWidget {
 
 class _HoverLiftState extends State<HoverLift> {
   bool _hover = false;
+  ScrollPosition? _pos;
+
+  // Al desplazarse la página el mouse queda quieto pero el elemento se mueve:
+  // Flutter no avisa que salió, así que se apaga el efecto para que no quede «pegado».
+  void _alScroll() {
+    if (_hover && mounted) setState(() => _hover = false);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _pos?.removeListener(_alScroll);
+    _pos = Scrollable.maybeOf(context)?.position;
+    _pos?.addListener(_alScroll);
+  }
+
+  @override
+  void dispose() {
+    _pos?.removeListener(_alScroll);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -107,15 +128,29 @@ class EnlaceNav extends StatefulWidget {
 
 class _EnlaceNavState extends State<EnlaceNav> {
   bool _hover = false;
+  bool _desmontado = false;
+
+  @override
+  void dispose() {
+    _desmontado = true;
+    super.dispose();
+  }
+
+  void _poner(bool v) {
+    if (!_desmontado && _hover != v) setState(() => _hover = v);
+  }
 
   @override
   Widget build(BuildContext context) {
     return MouseRegion(
       cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
+      onEnter: (_) => _poner(true),
+      onExit: (_) => _poner(false),
       child: GestureDetector(
-        onTap: widget.onTap,
+        onTap: () {
+          _poner(false);
+          widget.onTap();
+        },
         behavior: HitTestBehavior.opaque,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),

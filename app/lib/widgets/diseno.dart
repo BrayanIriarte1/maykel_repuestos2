@@ -150,7 +150,7 @@ class _MarquesinaState extends State<Marquesina> with SingleTickerProviderStateM
   final _ctrl = ScrollController();
   late final Ticker _ticker;
   Duration _ultimo = Duration.zero;
-  bool _pausa = false;
+  final bool _pausa = false;
 
   @override
   void initState() {
@@ -174,8 +174,6 @@ class _MarquesinaState extends State<Marquesina> with SingleTickerProviderStateM
   Widget build(BuildContext context) {
     if (widget.items.isEmpty) return const SizedBox.shrink();
     return MouseRegion(
-      onEnter: (_) => _pausa = true,
-      onExit: (_) => _pausa = false,
       child: Container(
         height: widget.alto,
         color: widget.fondo,

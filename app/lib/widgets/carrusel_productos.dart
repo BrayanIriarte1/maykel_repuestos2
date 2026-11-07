@@ -31,7 +31,9 @@ class _CarruselProductosState extends State<CarruselProductos> {
 
   final _ctrl = ScrollController();
   Timer? _timer;
-  bool _pausa = false;
+  // Se pausa solo mientras el mouse se mueve encima; si queda quieto (o salió sin aviso) reanuda.
+  DateTime _ultimoHover = DateTime.fromMillisecondsSinceEpoch(0);
+  bool get _pausa => DateTime.now().difference(_ultimoHover) < const Duration(milliseconds: 1500);
   double _paso = 280;
 
   @override
@@ -86,8 +88,7 @@ class _CarruselProductosState extends State<CarruselProductos> {
       final ancho = (c.maxWidth - _gap * (n - 1)) / n;
       _paso = (ancho + _gap) * (n > 2 ? n - 1 : 1);
       return MouseRegion(
-        onEnter: (_) => _pausa = true,
-        onExit: (_) => _pausa = false,
+        onHover: (_) => _ultimoHover = DateTime.now(),
         child: Stack(
           alignment: Alignment.center,
           children: [

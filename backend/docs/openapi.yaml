@@ -766,6 +766,54 @@ paths:
           $ref: '#/components/responses/NoAutorizado'
         '403':
           $ref: '#/components/responses/Prohibido'
+  /api/admin/notificaciones/estado:
+    get:
+      tags: [Admin - Notificaciones y sincronización]
+      summary: Estado de los canales de aviso (correo y WhatsApp)
+      description: Indica si están configurados y qué variables faltan, sin revelar secretos. Requiere permiso de configuración.
+      security: [{basicAuth: []}]
+      responses:
+        '200': {description: Estado de los canales}
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+  /api/admin/notificaciones/probar:
+    post:
+      tags: [Admin - Notificaciones y sincronización]
+      summary: Envía un mensaje de prueba por correo o WhatsApp
+      security: [{basicAuth: []}]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                canal: {type: string, enum: [correo, whatsapp]}
+                destino: {type: string, description: Correo de destino opcional}
+      responses:
+        '200': {description: "Resultado {ok, error?, ms?}"}
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+  /api/admin/sync/historial:
+    get:
+      tags: [Admin - Notificaciones y sincronización]
+      summary: Últimas 30 sincronizaciones con el sistema del cliente
+      security: [{basicAuth: []}]
+      responses:
+        '200': {description: "{enCurso, items[]}"}
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+  /api/admin/sync/ejecutar:
+    post:
+      tags: [Admin - Notificaciones y sincronización]
+      summary: Inicia una sincronización ahora (en segundo plano)
+      security: [{basicAuth: []}]
+      responses:
+        '202': {description: Sincronización iniciada}
+        '409': {description: Ya hay una en curso}
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
   /api/admin/usuarios:
     get:
       tags: [Admin - Usuarios y roles]

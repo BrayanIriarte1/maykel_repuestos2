@@ -157,7 +157,11 @@ const Map<String, String> permisoPorRuta = {
   'reservas': 'reservas',
   'dashboard': 'dashboard',
   'analytics': 'dashboard',
+  'notificaciones': 'configuracion',
+  'sync': 'stock',
 };
+
+DateTime? _syncManualDesde;
 
 /// Origen permitido por CORS. En producción definir CORS_ORIGIN=https://tudominio.cl
 String get _origenCors => db.env['CORS_ORIGIN'] ?? '*';
@@ -1760,6 +1764,75 @@ void main(List<String> args) async {
       parameters: {'id': idNum},
     );
     return _jsonResponse({'ok': true});
+  });
+
+  // ==========================================================================
+  // NOTIFICACIONES Y SINCRONIZACIÓN (panel: probar correo/WhatsApp, historial, sync manual)
+  // ==========================================================================
+  router.get('/api/admin/notificaciones/estado', (Request req) async {
+    return _jsonResponse(Notificador(db.env).estado());
+  });
+
+  router.post('/api/admin/notificaciones/probar', (Request req) async {
+    final b = await _leerJsonBody(req);
+    final canal = b?['canal']?.toString() == 'whatsapp' ? 'whatsapp' : 'correo';
+    final r = await Notificador(db.env)
+        .probar(canal == 'whatsapp' ? 'whatsapp' : 'email', destinoCorreo: b?['destino']?.toString());
+    return _jsonResponse(r);
+  });
+
+  router.get('/api/admin/sync/historial', (Request req) async {
+    final rows = await db.conn.execute('''
+      SELECT id, to_char(fecha_inicio, 'YYYY-MM-DD"T"HH24:MI:SS"Z"'), total_procesados,
+             total_agotados, nuevos_pendientes, estado, COALESCE(mensaje_detalle, '')
+      FROM logs_sincronizacion ORDER BY id DESC LIMIT 30
+    ''');
+    return _jsonResponse({
+      'enCurso': _syncManualDesde != null &&
+          DateTime.now().difference(_syncManualDesde!) < const Duration(minutes: 3),
+      'items': rows
+          .map((r) => {
+                'id': r[0],
+                'fecha': r[1],
+                'procesados': r[2],
+                'agotados': r[3],
+                'nuevos': r[4],
+                'estado': r[5],
+                'detalle': r[6],
+              })
+          .toList(),
+    });
+  });
+
+  router.post('/api/admin/sync/ejecutar', (Request req) async {
+    final ahora = DateTime.now();
+    if (_syncManualDesde != null && ahora.difference(_syncManualDesde!) < const Duration(minutes: 3)) {
+      return _errorResponse('Ya hay una sincronización en curso. Espera unos minutos.', status: 409);
+    }
+    final puerto = db.env['PORT'] ?? '8080';
+    final exe = File(p.join(_dirBackend, 'tools', 'sync_agent'));
+    final script = File(p.join(_dirBackend, 'tools', 'sync_agent.dart'));
+    String cmd;
+    List<String> args;
+    if (exe.existsSync()) {
+      cmd = exe.path;
+      args = ['--sistema', '--url', 'http://127.0.0.1:$puerto'];
+    } else if (script.existsSync()) {
+      cmd = 'dart';
+      args = ['run', 'tools/sync_agent.dart', '--sistema', '--url', 'http://127.0.0.1:$puerto'];
+    } else {
+      return _errorResponse('No se encontró el agente de sincronización en el servidor.', status: 500);
+    }
+    try {
+      await Process.start(cmd, args, workingDirectory: _dirBackend, mode: ProcessStartMode.detached);
+    } catch (e) {
+      return _errorResponse('No se pudo iniciar la sincronización: $e', status: 500);
+    }
+    _syncManualDesde = ahora;
+    return _jsonResponse({
+      'ok': true,
+      'mensaje': 'Sincronización iniciada. Tarda 1 a 2 minutos; el historial se actualiza solo.'
+    }, status: 202);
   });
 
   router.get('/api/admin/usuarios', (Request req) async {

@@ -100,6 +100,33 @@ void main() {
   });
 
   group('Reservas (RF03)', () {
+    test('reserva con varios repuestos devuelve folio, ítems y PDF válido', () async {
+      final lista = jsonDecode((await http.get(u('/api/repuestos?limite=40'))).body);
+      final ids = (lista['items'] as List)
+          .where((e) => (e['stock'] as num) >= 1 && e['es_ejemplo'] != true)
+          .take(2)
+          .map((e) => e['id'])
+          .toList();
+      if (ids.length < 2) return;
+      final r = await http.post(u('/api/reservas'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'nombre': 'Prueba PDF Ñandú',
+            'telefono': '+56911111111',
+            'email': 'prueba@ejemplo.cl',
+            'items': [
+              {'producto_id': ids[0], 'cantidad': 1},
+              {'producto_id': ids[1], 'cantidad': 1},
+            ],
+          }));
+      expect(r.statusCode, 201);
+      final d = jsonDecode(r.body);
+      expect(d['folio'], isNotEmpty);
+      expect((d['items'] as List).length, 2);
+      final pdf = base64Decode(d['pdf_base64'] as String);
+      expect(String.fromCharCodes(pdf.sublist(0, 5)), '%PDF-');
+    });
+
     test('rechaza contacto inválido', () async {
       final r = await http.post(u('/api/reservas'),
           headers: {'Content-Type': 'application/json'},

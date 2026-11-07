@@ -125,7 +125,7 @@ class _AdminLoginDialogState extends State<_AdminLoginDialog> {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: AppColors.bad.withOpacity(0.08),
+              color: AppColors.bad.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Row(children: [

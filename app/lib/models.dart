@@ -1,5 +1,6 @@
 /// Modelos de datos del catálogo, reservas y ventas.
 /// Reflejan exactamente la misma estructura JSON que entrega el backend.
+library;
 
 import 'config.dart';
 
@@ -121,10 +122,15 @@ class Reserva {
     required this.nota,
     required this.estado,
     this.items = const [],
+    this.pdfBase64,
   });
+
+  /// Comprobante PDF generado por el backend (solo viene al crear la reserva).
+  final String? pdfBase64;
 
   factory Reserva.fromJson(Map<String, dynamic> json) {
     return Reserva(
+      pdfBase64: json['pdf_base64'] as String?,
       id: json['id'] as String,
       fecha: json['fecha'] as String,
       repuestoId: (json['repuestoId'] as num).toInt(),

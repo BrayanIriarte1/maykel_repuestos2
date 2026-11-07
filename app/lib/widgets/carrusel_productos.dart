@@ -306,7 +306,7 @@ class _Diapositiva extends StatelessWidget {
               right: -20,
               bottom: -30,
               child: Icon(iconoCategoria(producto.categoria),
-                  size: 190, color: Colors.white.withOpacity(0.06)),
+                  size: 190, color: Colors.white.withValues(alpha: 0.06)),
             ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -342,7 +342,7 @@ class _Diapositiva extends StatelessWidget {
                   ElevatedButton.icon(
                     onPressed: producto.stock > 0 ? onReservar : null,
                     icon: const Icon(Icons.event_available, size: 18),
-                    label: const Text('Reservar'),
+                    label: const Text('Agregar a reserva'),
                   ),
                   const SizedBox(width: 12),
                   Text(producto.sku,

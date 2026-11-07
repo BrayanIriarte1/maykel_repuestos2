@@ -7,7 +7,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-
+import 'dart:typed_data';
 import 'package:path/path.dart' as p;
 import 'package:postgres/postgres.dart';
 import 'package:shelf/shelf.dart';
@@ -18,6 +18,7 @@ import 'package:shelf_static/shelf_static.dart';
 
 import '../lib/db.dart';
 import '../lib/notificador.dart';
+import '../lib/pdf_reserva.dart';
 import '../lib/seguridad.dart';
 import '../lib/vehiculos.dart';
 
@@ -1054,6 +1055,7 @@ void main(List<String> args) async {
     // Restricción Cap. 5.1.2 del Informe:
     // "Una reserva web no descuenta inventario físico de forma automática. Queda Pendiente de confirmación".
     final lineasNotificacion = <String>[];
+    final itemsRespuesta = <Map<String, dynamic>>[];
     final result = await db.conn.runTx((tx) async {
       final resCabecera = await tx.execute(
         Sql.named('''
@@ -1108,6 +1110,7 @@ void main(List<String> args) async {
         primeraCantidad = cant;
         primerProdId = prodId;
         lineasNotificacion.add('$primerProductoNombre ($primerSku) x$cant');
+        itemsRespuesta.add({'sku': primerSku, 'nombre': primerProductoNombre, 'cantidad': cant});
 
         await tx.execute(
           Sql.named('''
@@ -1137,11 +1140,21 @@ void main(List<String> args) async {
         'email': email,
         'nota': nota,
         'estado': 'pendiente',
+        'items': itemsRespuesta,
       };
     });
 
+    // El PDF se genera en memoria una sola vez: se devuelve al cliente (descarga
+    // automática, RF03) y se reutiliza como adjunto del correo (RF04).
+    Uint8List? pdf;
+    try {
+      pdf = await generarPdfReserva(result, lineasNotificacion);
+    } catch (e) {
+      print('⚠️ No se pudo generar el PDF (${result['folio']}): $e');
+    }
+
     // Envío en segundo plano: no retrasa ni rompe la respuesta al cliente (RNF06).
-    Notificador(db.env).notificarReserva(result, lineasNotificacion).then((n) {
+    Notificador(db.env).notificarReserva(result, lineasNotificacion, pdfListo: pdf).then((n) {
       db.conn.execute(
         Sql.named(
             'UPDATE reservas SET notificado_whatsapp=@w, notificado_email=@e WHERE id=@id'),
@@ -1153,7 +1166,10 @@ void main(List<String> args) async {
       );
     }).catchError((Object e) => print('⚠️ Notificación falló: $e'));
 
-    return _jsonResponse(result, status: 201);
+    return _jsonResponse({
+      ...result,
+      if (pdf != null) 'pdf_base64': base64Encode(pdf),
+    }, status: 201);
   });
 
   router.get('/api/admin/reservas', (Request req) async {

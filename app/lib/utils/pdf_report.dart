@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -10,7 +11,12 @@ Future<void> generarReportePdf({
   required List<String> columnas,
   required List<List<String>> filas,
 }) async {
-  final doc = pw.Document();
+  // Roboto incluida en la app: la Helvetica estándar del PDF no soporta tildes ni ñ.
+  final tema = pw.ThemeData.withFont(
+    base: pw.Font.ttf(await rootBundle.load('assets/fonts/Roboto-Regular.ttf')),
+    bold: pw.Font.ttf(await rootBundle.load('assets/fonts/Roboto-Bold.ttf')),
+  );
+  final doc = pw.Document(theme: tema);
   final fechaGeneracion = DateTime.now();
   final fechaStr = '${fechaGeneracion.day.toString().padLeft(2, '0')}/'
       '${fechaGeneracion.month.toString().padLeft(2, '0')}/'
@@ -32,7 +38,7 @@ Future<void> generarReportePdf({
           style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
         ),
         pw.SizedBox(height: 16),
-        pw.Table.fromTextArray(
+        pw.TableHelper.fromTextArray(
           headers: columnas,
           data: filas.isEmpty ? [List.filled(columnas.length, 'Sin registros')] : filas,
           headerStyle: pw.TextStyle(

@@ -361,7 +361,7 @@ class _InventarioAdminState extends State<InventarioAdmin> {
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     value: publicado,
-                    activeColor: AppColors.red,
+                    activeThumbColor: AppColors.red,
                     title: const Text('Visible en el catálogo público'),
                     onChanged: (v) => setD(() => publicado = v),
                   ),
@@ -536,7 +536,7 @@ class _InventarioAdminState extends State<InventarioAdmin> {
         SizedBox(
           width: 230,
           child: DropdownButtonFormField<String>(
-            value: _categoria.isEmpty || !_categorias.contains(_categoria) ? '' : _categoria,
+            initialValue: _categoria.isEmpty || !_categorias.contains(_categoria) ? '' : _categoria,
             isExpanded: true,
             decoration: const InputDecoration(isDense: true, labelText: 'Categoría'),
             items: [
@@ -734,7 +734,7 @@ class _InventarioAdminState extends State<InventarioAdmin> {
   Widget _chip(String texto, Color color) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
         decoration: BoxDecoration(
-            color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(20)),
+            color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
         child: Text(texto,
             style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w800)),
       );

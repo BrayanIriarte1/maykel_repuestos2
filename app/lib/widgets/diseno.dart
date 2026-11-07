@@ -220,10 +220,10 @@ class TarjetaMarca extends StatelessWidget {
             color: activa ? AppColors.red : Colors.white,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-                color: activa ? AppColors.red : AppColors.red.withOpacity(0.35), width: 1.6),
+                color: activa ? AppColors.red : AppColors.red.withValues(alpha: 0.35), width: 1.6),
             boxShadow: [
               BoxShadow(
-                color: (activa ? AppColors.red : Colors.black).withOpacity(activa ? 0.28 : 0.05),
+                color: (activa ? AppColors.red : Colors.black).withValues(alpha: activa ? 0.28 : 0.05),
                 blurRadius: activa ? 20 : 8,
                 offset: const Offset(0, 6),
               ),
@@ -233,7 +233,7 @@ class TarjetaMarca extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(Icons.directions_car_filled_rounded,
-                  size: 22, color: activa ? Colors.white70 : AppColors.red.withOpacity(0.55)),
+                  size: 22, color: activa ? Colors.white70 : AppColors.red.withValues(alpha: 0.55)),
               const SizedBox(height: 6),
               SizedBox(
                 width: double.infinity,
@@ -311,7 +311,7 @@ class TarjetaCategoria extends StatelessWidget {
                     child: Padding(
                       padding: const EdgeInsets.all(14),
                       child: Icon(iconoCategoria(nombre),
-                          size: 64, color: Colors.white.withOpacity(0.12)),
+                          size: 64, color: Colors.white.withValues(alpha: 0.12)),
                     ),
                   ),
                 ),
@@ -323,8 +323,8 @@ class TarjetaCategoria extends StatelessWidget {
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: [
-                      AppColors.red.withOpacity(hover ? 0.10 : 0.22),
-                      AppColors.char.withOpacity(0.92),
+                      AppColors.red.withValues(alpha: hover ? 0.10 : 0.22),
+                      AppColors.char.withValues(alpha: 0.92),
                     ],
                   ),
                 ),
@@ -402,7 +402,7 @@ class TarjetaInfo extends StatelessWidget {
           border: Border.all(color: hover ? AppColors.red : AppColors.paper2, width: 1.4),
           boxShadow: [
             BoxShadow(
-                color: Colors.black.withOpacity(hover ? 0.12 : 0.05),
+                color: Colors.black.withValues(alpha: hover ? 0.12 : 0.05),
                 blurRadius: hover ? 22 : 10,
                 offset: const Offset(0, 8)),
           ],
@@ -471,7 +471,7 @@ class PasoReserva extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.06),
+        color: Colors.white.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.white12),
       ),
@@ -484,7 +484,7 @@ class PasoReserva extends StatelessWidget {
                 style: TextStyle(
                     fontSize: 110,
                     fontWeight: FontWeight.w900,
-                    color: Colors.white.withOpacity(0.06),
+                    color: Colors.white.withValues(alpha: 0.06),
                     height: 1)),
           ),
           Column(

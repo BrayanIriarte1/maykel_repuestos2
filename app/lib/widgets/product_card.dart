@@ -11,10 +11,14 @@ class ProductCard extends StatelessWidget {
   final Repuesto producto;
   final VoidCallback onReservar;
 
+  /// Si se entrega, un producto agotado muestra «Me interesa» (registra demanda).
+  final VoidCallback? onMeInteresa;
+
   const ProductCard({
     super.key,
     required this.producto,
     required this.onReservar,
+    this.onMeInteresa,
   });
 
   @override
@@ -30,7 +34,7 @@ class ProductCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: hover ? AppColors.red.withOpacity(0.5) : AppColors.paper2),
+          border: Border.all(color: hover ? AppColors.red.withValues(alpha: 0.5) : AppColors.paper2),
           boxShadow: [
             BoxShadow(
               color: hover ? const Color(0x33D91E2B) : const Color(0x14000000),
@@ -80,9 +84,9 @@ class ProductCard extends StatelessWidget {
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
                           colors: [
-                            Colors.black.withOpacity(0.55),
+                            Colors.black.withValues(alpha: 0.55),
                             Colors.transparent,
-                            AppColors.char.withOpacity(0.35),
+                            AppColors.char.withValues(alpha: 0.35),
                           ],
                           stops: const [0, 0.45, 1],
                         ),
@@ -110,7 +114,7 @@ class ProductCard extends StatelessWidget {
                               duration: const Duration(milliseconds: 180),
                               scale: hover ? 1.15 : 1,
                               child: Icon(iconoCategoria(producto.categoria),
-                                  color: Colors.white.withOpacity(0.35), size: 44),
+                                  color: Colors.white.withValues(alpha: 0.35), size: 44),
                             ),
                           )
                         else if (referencial)
@@ -177,14 +181,14 @@ class ProductCard extends StatelessWidget {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
-                      onPressed: agotado ? null : onReservar,
-                      icon: Icon(agotado ? Icons.block : Icons.event_available, size: 16),
+                      onPressed: agotado ? onMeInteresa : onReservar,
+                      icon: Icon(agotado ? Icons.notifications_active_outlined : Icons.event_available, size: 16),
                       style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 11),
                         textStyle: const TextStyle(fontSize: 13),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       ),
-                      label: Text(agotado ? 'Agotado' : 'Reservar'),
+                      label: Text(agotado ? 'Agotado · Me interesa' : 'Agregar a reserva'),
                     ),
                   ),
                 ],

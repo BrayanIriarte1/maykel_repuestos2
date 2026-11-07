@@ -16,6 +16,7 @@ Carpetas en el servidor:
 | `/opt/maykel/backend/tools/sync_agent` | agente de sincronización compilado |
 | `/opt/maykel/backend/.env` | claves de producción (permisos 600, **nunca** a GitHub) |
 | `/opt/maykel/backend/docs`, `database` | `openapi.yaml`, `schema.sql`, `migraciones.sql` |
+| `/opt/maykel/backend/assets/fonts` | Roboto: fuente del PDF de la reserva (sin ella el PDF usa Helvetica y pierde tildes/ñ) |
 | `/opt/maykel/backend/uploads` | fotos subidas desde el panel (**no** van en el respaldo de la BD) |
 | `/opt/maykel/app/build/web` | web Flutter compilada |
 | `/opt/respaldos` | respaldos diarios de la BD (14 días) |
@@ -33,6 +34,17 @@ Entrar al servidor: `ssh -i $k $h`. Salir: `exit`.
 
 ## 1. Actualizar la página (lo que harás más seguido)
 
+### Forma rápida (recomendada): un solo comando
+Desde `C:\Users\chunc\Maykel_Repuestos-master`, con Flutter y Dart en el PATH:
+```powershell
+powershell -ExecutionPolicy Bypass -File .\desplegar.ps1            # web + backend
+powershell -ExecutionPolicy Bypass -File .\desplegar.ps1 -Web       # solo frontend (pantallas, textos, estilos)
+powershell -ExecutionPolicy Bypass -File .\desplegar.ps1 -Backend   # solo API/servidor (reinicia el servicio)
+```
+El script compila, sube los archivos, reinicia el servicio si corresponde y al final consulta `/api/health`.
+Después recarga la página con **Ctrl+F5**. Los pasos manuales equivalentes están abajo por si necesitas hacerlos a mano.
+
+### Pasos manuales
 Todo se ejecuta **desde tu PC**, en `C:\Users\chunc\Maykel_Repuestos-master`.
 Ruta de Dart/Flutter si no están en el PATH: `$env:Path = "C:\Users\chunc\flutter\bin;C:\Users\chunc\flutter\bin\cache\dart-sdk\bin;" + $env:Path`
 
@@ -58,6 +70,7 @@ scp -i $k server_linux "${h}:/opt/maykel/backend/bin/server.nuevo"
 scp -i $k sync_agent_linux "${h}:/opt/maykel/backend/tools/sync_agent.nuevo"
 scp -i $k backend\database\migraciones.sql backend\database\schema.sql "${h}:/opt/maykel/backend/database/"
 scp -i $k backend\docs\openapi.yaml "${h}:/opt/maykel/backend/docs/"
+scp -i $k backend\assets\fonts\* "${h}:/opt/maykel/backend/assets/fonts/"
 ssh -i $k $h "cd /opt/maykel/backend && chmod +x bin/server.nuevo tools/sync_agent.nuevo && mv bin/server.nuevo bin/server && mv tools/sync_agent.nuevo tools/sync_agent && systemctl restart maykel && sleep 3 && systemctl is-active maykel"
 Remove-Item server_linux, sync_agent_linux
 ```
@@ -127,7 +140,8 @@ No ejecutes además la tarea programada de Windows (`instalar_sync.ps1`): sobrar
 ## 3. Seguridad (estado y reglas)
 
 - Firewall `ufw`: solo SSH (22), 80 y 443. PostgreSQL y el puerto 8080 **no** son públicos.
-- HTTPS con Let's Encrypt, renovación automática (`certbot renew --dry-run` para probarla).
+- SSH: **solo con llave** (`/etc/ssh/sshd_config.d/00-hardening.conf`: `PasswordAuthentication no`, `PermitRootLogin prohibit-password`) y `fail2ban` activo (bloquea IP con intentos fallidos; revisar con `fail2ban-client status sshd`). Si pierdes la llave, entra por la consola web de MOX.
+- HTTPS con Let's Encrypt (TLS 1.2 y 1.3), cabecera HSTS y compresión gzip en Nginx (`/etc/nginx/conf.d/maykel-gzip.conf`); renovación automática (`certbot renew --dry-run` para probarla).
 - Acceso al servidor solo por llave SSH. No compartas por chat contraseñas, `.env` ni la llave privada `maykel_vps`.
 - Las claves de `admin`, `daniel` y `vendedor` se cambian en **Admin → Usuarios**.
 - `/api/docs` es público; no expone datos, pero los endpoints `/api/admin/*` exigen sesión.
@@ -142,6 +156,7 @@ No ejecutes además la tarea programada de Windows (`instalar_sync.ps1`): sobrar
 | `502 Bad Gateway` | El servidor Dart no corre: `systemctl status maykel` y `journalctl -u maykel -n 50` |
 | La web muestra la versión vieja | Ctrl+F5; si sigue, repite 1A |
 | `Permission denied (publickey)` al hacer `ssh` | Falta la llave en el servidor: entra por la consola de MOX y agrega la llave pública (`maykel_vps.pub`) a `~/.ssh/authorized_keys` |
+| `desplegar.ps1 ... la ejecución de scripts está deshabilitada` | Usa `powershell -ExecutionPolicy Bypass -File .\desplegar.ps1` |
 | `413` al subir una foto | `client_max_body_size` de Nginx (hoy 5M); el backend acepta hasta 3 MB |
 | Error de contraseña de la BD | `DB_PASS` del `.env` distinto a la clave del usuario `postgres` |
 | Stock desactualizado | `tail -n 20 /var/log/maykel_sync.log`; ¿cambió la clave del sistema del cliente? |
@@ -157,7 +172,7 @@ Resumen de lo que se hizo; usa Ubuntu 24.04 LTS con acceso root por SSH y ≥ 20
 1. **DNS:** registros `A` para `@` y `www` hacia la IP del VPS (`nslookup tudominio.cl`).
 2. **Llave SSH:** `ssh-keygen -t ed25519 -f $env:USERPROFILE\.ssh\maykel_vps -N '""'` y agrega la `.pub` a `/root/.ssh/authorized_keys` del servidor.
 3. **Programas:** `apt update && apt install -y postgresql nginx certbot python3-certbot-nginx ufw`
-4. **Carpetas y archivos:** crea `/opt/maykel/{backend/{bin,tools,docs,database,uploads},app/build}` y sube con `scp`: `server`, `sync_agent` (compilados con `--target-os linux`, ver 1B), `openapi.yaml`, `schema.sql`, `migraciones.sql`, y la web (1A).
+4. **Carpetas y archivos:** crea `/opt/maykel/{backend/{bin,tools,docs,database,uploads,assets/fonts},app/build}` y sube con `scp`: `server`, `sync_agent` (compilados con `--target-os linux`, ver 1B), `openapi.yaml`, `schema.sql`, `migraciones.sql`, `assets/fonts/*` y la web (1A). Con el script `desplegar.ps1` esto es automático una vez creadas las carpetas.
 5. **Base de datos:** `sudo -u postgres createdb maykel_repuestos2`, restaura `maykel.sql` (ver Respaldos) o usa `schema.sql` + `migraciones.sql` si parte vacía. Clave nueva: `ALTER USER postgres PASSWORD '...'`. El archivo SQL debe estar en `/tmp` (el usuario `postgres` no lee `/root`).
 6. **`.env`** (`chmod 600`): `PORT=8080`, `DB_*`, `JWT_SECRET` y `SYNC_API_TOKEN` (`openssl rand -hex 32`), `CORS_ORIGIN=https://tudominio.cl`, `TRUST_PROXY=1`, `SISTEMA_URL/EMAIL/PASS/BODEGAS`.
 7. **Servicio** `/etc/systemd/system/maykel.service`:

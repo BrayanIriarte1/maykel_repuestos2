@@ -27,10 +27,12 @@ Está escrita para **aprender de a poco**. No necesitas memorizar nada: necesita
 
 ```
 maykel_repuestos2/
-├─ iniciar.ps1                  ← enciende todo (compila web si falta + servidor)
+├─ iniciar.ps1                  ← enciende todo en tu PC (compila web si falta + servidor)
+├─ desplegar.ps1                ← sube los cambios a producción (web y/o backend) con un comando
 ├─ app/                         ← FRONTEND (Flutter / Dart)
 │  ├─ pubspec.yaml              ← paquetes y assets (imágenes)
 │  ├─ assets/images/            ← logo y fotos referenciales (repuestos/ + CREDITOS.md)
+│  ├─ assets/fonts/             ← Roboto (licencia Apache 2.0) para los PDF con tildes y ñ
 │  └─ lib/
 │     ├─ main.dart              ← arranque: restaura sesión, rutas (#/admin)
 │     ├─ config.dart            ← colores (AppColors), tema, kApiBase
@@ -45,7 +47,7 @@ maykel_repuestos2/
 │     │  ├─ admin_login_dialog.dart, admin_inventario.dart (tabla de stock), admin_reservas.dart
 │     │  ├─ diseno.dart         ← Revelar, Marquesina, TarjetaMarca/Categoría/Info, fotos referenciales
 │     │  └─ efectos.dart        ← HoverLift, TituloSeccion, Centrado, iconos por categoría
-│     └─ utils/                 ← formato CLP, PDF, almacenamiento de sesión (sessionStorage)
+│     └─ utils/                 ← formato CLP, PDF de reportes, carrito.dart (lista de reserva), descarga.dart, sesión (sessionStorage)
 ├─ backend/                     ← BACKEND (Dart + shelf)
 │  ├─ pubspec.yaml              ← paquetes del servidor
 │  ├─ .env                      ← claves (NO está en GitHub). Plantilla: .env.example
@@ -54,8 +56,9 @@ maykel_repuestos2/
 │  │  ├─ db.dart                ← conexión a PostgreSQL (pool) + lee .env + aplica migraciones
 │  │  ├─ seguridad.dart         ← bcrypt (claves), JWT (sesiones), límite de intentos
 │  │  ├─ notificador.dart       ← correo SMTP y WhatsApp al llegar una reserva
-│  │  ├─ pdf_reserva.dart       ← comprobante PDF
+│  │  ├─ pdf_reserva.dart       ← comprobante PDF (usa assets/fonts/Roboto)
 │  │  └─ vehiculos.dart         ← deduce marca/modelo desde el nombre del producto
+│  ├─ assets/fonts/             ← Roboto para el PDF de la reserva (el servidor la busca junto a bin/)
 │  ├─ database/
 │  │  ├─ schema.sql             ← crea las tablas + datos de ejemplo (instalación desde cero)
 │  │  └─ migraciones.sql        ← cambios que se aplican solos al arrancar (índices, columnas)
@@ -155,7 +158,7 @@ Al final del archivo (busca `final pipeline = const Pipeline()`), cada petición
 ## 6. Tres recorridos completos (síguelos con el código abierto)
 
 **① Un cliente reserva**
-`product_card.dart` (botón *Reservar*) → `reserva_dialog.dart` → `ApiService.crearReserva` → `POST /api/reservas` (server.dart, sección 5: valida datos, inserta en `reservas` y `reserva_detalles` dentro de una transacción) → en segundo plano `Notificador` manda correo/WhatsApp → responde con el folio.
+`product_card.dart` (botón *Agregar a reserva*) → `utils/carrito.dart` (lista en memoria) → botón flotante *Mi reserva* → `reserva_dialog.dart` (datos, consentimiento Ley 19.628) → `ApiService.crearReserva` → `POST /api/reservas` (server.dart, sección 5: valida datos, inserta en `reservas` y `reserva_detalles` dentro de una transacción, genera el PDF en memoria con `lib/pdf_reserva.dart`) → responde con el folio, los ítems y el PDF en base64 → el navegador lo descarga solo (`utils/descarga_web.dart`) → en segundo plano `Notificador` manda correo (con ese mismo PDF) y WhatsApp.
 
 **② El vendedor confirma y entrega**
 `admin_reservas.dart` (botones) → `_cambiarEstadoReserva` en `admin_screen.dart` → `ApiService.actualizarEstadoReserva` → `PUT /api/admin/reservas/<id>` (descuenta stock / crea venta en una transacción) → el panel se vuelve a cargar (`_cargarResumen`) y Analítica muestra la venta.

@@ -891,7 +891,7 @@ class _AdminScreenState extends State<AdminScreen> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 2),
                       decoration: BoxDecoration(
-                          color: AppColors.warn.withOpacity(0.14),
+                          color: AppColors.warn.withValues(alpha: 0.14),
                           borderRadius: BorderRadius.circular(20)),
                       child: Text('${p.stock} u.',
                           style: const TextStyle(
@@ -1155,7 +1155,7 @@ class _AdminScreenState extends State<AdminScreen> {
                             barWidth: 3,
                             dotData: const FlDotData(show: false),
                             belowBarData: BarAreaData(
-                                show: true, color: AppColors.red.withOpacity(0.12)),
+                                show: true, color: AppColors.red.withValues(alpha: 0.12)),
                           ),
                         ],
                       ),
@@ -2013,7 +2013,7 @@ class _AdminScreenState extends State<AdminScreen> {
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<int>(
-                      value: rolSeleccionado,
+                      initialValue: rolSeleccionado,
                       decoration: const InputDecoration(labelText: 'Rol'),
                       items: _roles
                           .map((r) => DropdownMenuItem(value: r.id, child: Text(r.nombre)))

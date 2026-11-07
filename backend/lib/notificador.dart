@@ -2,7 +2,7 @@
 // Si WhatsApp falla, se envía el respaldo por correo (HU-04, escenario 2).
 // Nada se envía si las variables de entorno no están configuradas.
 import 'dart:convert';
-
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:mailer/mailer.dart';
 import 'package:mailer/smtp_server.dart';
@@ -95,7 +95,8 @@ class Notificador {
 
   /// Nunca lanza: un fallo de mensajería no debe romper la reserva del cliente.
   Future<ResultadoNotificacion> notificarReserva(
-      Map<String, dynamic> reserva, List<String> lineas) async {
+      Map<String, dynamic> reserva, List<String> lineas,
+      {Uint8List? pdfListo}) async {
     final texto = _resumen(reserva, lineas);
     var okWa = false;
     var okMail = false;
@@ -105,7 +106,7 @@ class Notificador {
       print('⚠️ WhatsApp falló (${reserva['folio']}): $e');
     }
     try {
-      final pdf = await generarPdfReserva(reserva, lineas);
+      final pdf = pdfListo ?? await generarPdfReserva(reserva, lineas);
       okMail = await _enviarEmail('Nueva reserva ${reserva['folio']}', texto,
           pdf: pdf, nombrePdf: '${reserva['folio']}.pdf');
     } catch (e) {

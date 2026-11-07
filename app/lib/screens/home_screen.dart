@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../api_service.dart';
 import '../config.dart';
 import '../models.dart';
+import '../utils/carrito.dart';
 import '../widgets/admin_login_dialog.dart';
 import '../widgets/carrusel_productos.dart';
 import '../widgets/diseno.dart';
@@ -619,7 +620,50 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _abrirReserva(Repuesto p) {
-    mostrarDialogoReserva(context, p, _cargarProductos);
+    final agregado = CarritoReserva.instance.agregar(p);
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(SnackBar(
+      duration: const Duration(seconds: 4),
+      content: Text(agregado
+          ? 'Agregado a tu reserva: ${p.nombre}'
+          : 'Ya tienes todo el stock disponible de este repuesto en tu reserva.'),
+      action: SnackBarAction(label: 'Ver mi reserva', onPressed: _verReserva),
+    ));
+  }
+
+  void _verReserva() => mostrarDialogoReserva(context, _cargarProductos);
+
+  void _meInteresa(Repuesto p) {
+    ApiService.instance.registrarInteresAgotado(p);
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(SnackBar(
+      duration: const Duration(seconds: 6),
+      content: Text('Registramos tu interés en ${p.nombre}. Consúltanos por su reposición.'),
+      action: SnackBarAction(
+        label: 'WhatsApp',
+        onPressed: () => launchUrl(
+          Uri.parse('https://wa.me/${SiteContent.actual.contactoWhatsapp}?text='
+              '${Uri.encodeComponent('Hola, me interesa ${p.nombre} (${p.sku}). ¿Cuándo vuelve a haber stock?')}'),
+          mode: LaunchMode.externalApplication,
+        ),
+      ),
+    ));
+  }
+
+  void _solicitarReservaEspecial() {
+    final partes = [
+      if (_busquedaCtrl.text.trim().isNotEmpty) _busquedaCtrl.text.trim(),
+      if (_marca != null) _marca!,
+      if (_modelo != null) _modelo!,
+      if (_categoria != null) _categoria!,
+    ];
+    final texto = Uri.encodeComponent(
+        'Hola, busco un repuesto que no aparece en el catálogo'
+        '${partes.isEmpty ? '' : ': ${partes.join(' · ')}'}. ¿Pueden cotizarlo o conseguirlo?');
+    launchUrl(Uri.parse('https://wa.me/${SiteContent.actual.contactoWhatsapp}?text=$texto'),
+        mode: LaunchMode.externalApplication);
   }
 
   @override
@@ -646,6 +690,27 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           const SizedBox(height: 10),
+          ListenableBuilder(
+            listenable: CarritoReserva.instance,
+            builder: (_, __) {
+              final c = CarritoReserva.instance;
+              if (c.vacio) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: FloatingActionButton.extended(
+                  heroTag: 'reserva',
+                  onPressed: _verReserva,
+                  backgroundColor: AppColors.red,
+                  foregroundColor: Colors.white,
+                  icon: Badge(
+                    label: Text('${c.totalUnidades}'),
+                    child: const Icon(Icons.event_available),
+                  ),
+                  label: const Text('Mi reserva'),
+                ),
+              );
+            },
+          ),
           FloatingActionButton.extended(
             heroTag: 'wa',
             onPressed: () =>
@@ -768,9 +833,9 @@ class _HomeScreenState extends State<HomeScreen> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
           decoration: BoxDecoration(
-            color: AppColors.red.withOpacity(0.18),
+            color: AppColors.red.withValues(alpha: 0.18),
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: AppColors.red.withOpacity(0.5)),
+            border: Border.all(color: AppColors.red.withValues(alpha: 0.5)),
           ),
           child: const Text('CALAMA · REGIÓN DE ANTOFAGASTA',
               style: TextStyle(
@@ -863,7 +928,7 @@ class _HomeScreenState extends State<HomeScreen> {
               height: 380,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: AppColors.red.withOpacity(0.12),
+                color: AppColors.red.withValues(alpha: 0.12),
               ),
             ),
           ),
@@ -875,7 +940,7 @@ class _HomeScreenState extends State<HomeScreen> {
               height: 300,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.white.withOpacity(0.03),
+                color: Colors.white.withValues(alpha: 0.03),
               ),
             ),
           ),
@@ -904,7 +969,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.06),
+        color: Colors.white.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: Colors.white12),
       ),
@@ -989,7 +1054,7 @@ class _HomeScreenState extends State<HomeScreen> {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: AppColors.red.withOpacity(0.1),
+              color: AppColors.red.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icono, color: AppColors.red, size: 22),
@@ -1194,10 +1259,21 @@ class _HomeScreenState extends State<HomeScreen> {
                     style: const TextStyle(color: AppColors.bad)),
               )
             else if (_items.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 30),
-                child: Text('No encontramos repuestos que coincidan con tu búsqueda.',
-                    style: TextStyle(color: AppColors.steel)),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 30),
+                child: Column(
+                  children: [
+                    const Text('No existen repuestos disponibles para esta configuración.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: AppColors.steel)),
+                    const SizedBox(height: 14),
+                    OutlinedButton.icon(
+                      onPressed: _solicitarReservaEspecial,
+                      icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                      label: const Text('Solicitar reserva especial de este repuesto'),
+                    ),
+                  ],
+                ),
               )
             else ...[
               LayoutBuilder(builder: (context, c) {
@@ -1213,6 +1289,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             child: ProductCard(
                               producto: p,
                               onReservar: () => _abrirReserva(p),
+                              onMeInteresa: () => _meInteresa(p),
                             ),
                           ))
                       .toList(),
@@ -1289,7 +1366,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return SizedBox(
       width: 230,
       child: DropdownButtonFormField<String?>(
-        value: valor,
+        initialValue: valor,
         isExpanded: true,
         decoration: InputDecoration(
           labelText: etiqueta,
@@ -1354,7 +1431,7 @@ class _HomeScreenState extends State<HomeScreen> {
         FilterChip(
           label: const Text('Solo con stock'),
           selected: _soloDisponibles,
-          selectedColor: AppColors.red.withOpacity(0.15),
+          selectedColor: AppColors.red.withValues(alpha: 0.15),
           checkmarkColor: AppColors.red,
           onSelected: (v) => _filtrar(() => _soloDisponibles = v),
         ),
@@ -1445,7 +1522,7 @@ class _HomeScreenState extends State<HomeScreen> {
               Container(
                 padding: const EdgeInsets.all(9),
                 decoration: BoxDecoration(
-                  color: AppColors.red.withOpacity(0.15),
+                  color: AppColors.red.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(t.$1, color: AppColors.yellow, size: 20),

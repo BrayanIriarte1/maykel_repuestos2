@@ -236,7 +236,7 @@ class _ReservasPanelState extends State<ReservasPanel> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: r.estado == 'pendiente' ? est.color.withOpacity(0.5) : AppColors.paper2),
+        border: Border.all(color: r.estado == 'pendiente' ? est.color.withValues(alpha: 0.5) : AppColors.paper2),
         boxShadow: const [BoxShadow(color: Color(0x0F000000), blurRadius: 12, offset: Offset(0, 5))],
       ),
       child: IntrinsicHeight(
@@ -261,7 +261,7 @@ class _ReservasPanelState extends State<ReservasPanel> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                           decoration: BoxDecoration(
-                              color: est.color.withOpacity(0.12), borderRadius: BorderRadius.circular(20)),
+                              color: est.color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
                           child: Row(mainAxisSize: MainAxisSize.min, children: [
                             Icon(est.icono, size: 13, color: est.color),
                             const SizedBox(width: 4),

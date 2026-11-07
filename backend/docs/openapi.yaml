@@ -1055,6 +1055,18 @@ components:
         email: {type: string}
         nota: {type: string}
         estado: {type: string, enum: [pendiente, confirmada, entregada, rechazada]}
+        items:
+          type: array
+          description: Repuestos de la reserva
+          items:
+            type: object
+            properties:
+              sku: {type: string}
+              nombre: {type: string}
+              cantidad: {type: integer}
+        pdf_base64:
+          type: string
+          description: Comprobante PDF (con tildes y ñ) en base64. Solo viene al crear la reserva (POST); el sitio lo descarga automáticamente.
     Venta:
       type: object
       properties:

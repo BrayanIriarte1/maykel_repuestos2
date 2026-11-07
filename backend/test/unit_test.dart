@@ -82,16 +82,18 @@ void main() {
     });
   });
 
-  test('PDF de reserva se genera en memoria', () async {
+  test('PDF de reserva se genera en memoria con tildes y ñ', () async {
     final bytes = await generarPdfReserva({
       'folio': 'RES-9',
       'fecha': DateTime.now().toIso8601String(),
-      'nombre': 'Ana',
+      'nombre': 'José Núñez',
       'telefono': '+56911111111',
       'email': 'a@b.cl',
-      'nota': '',
-    }, ['Pastilla de freno (MR-1) x2']);
+      'nota': 'Camión Año 2022',
+    }, ['Pastilla de freno señalización (MR-1) x2']);
     expect(String.fromCharCodes(bytes.sublist(0, 5)), '%PDF-');
     expect(bytes.length, greaterThan(1000));
+    // La fuente Roboto debe ir incrustada (FontFile2); la Helvetica estándar no trae Unicode.
+    expect(String.fromCharCodes(bytes).contains('/FontFile2'), isTrue);
   });
 }

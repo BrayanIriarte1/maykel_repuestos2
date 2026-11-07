@@ -203,23 +203,36 @@ class ApiService {
 
   // ---------- Reservas ----------
 
+  /// Registra el interés por un producto agotado (alimenta la analítica de demanda).
+  Future<void> registrarInteresAgotado(Repuesto p) async {
+    try {
+      await http.post(
+        _uri('/api/metricas/agotado'),
+        headers: _headers(json: true),
+        body: jsonEncode({'producto_id': p.id, 'nombre_producto': p.nombre}),
+      );
+    } catch (_) {
+      // El aviso al cliente no depende de que la métrica llegue.
+    }
+  }
+
   Future<Reserva> crearReserva({
-    required int repuestoId,
+    required List<({int id, int cantidad})> items,
     required String nombre,
     required String telefono,
     required String email,
-    required int cantidad,
     String nota = '',
   }) async {
     final resp = await http.post(
       _uri('/api/reservas'),
       headers: _headers(json: true),
       body: jsonEncode({
-        'repuestoId': repuestoId,
+        'items': [
+          for (final i in items) {'producto_id': i.id, 'cantidad': i.cantidad}
+        ],
         'nombre': nombre,
         'telefono': telefono,
         'email': email,
-        'cantidad': cantidad,
         'nota': nota,
       }),
     );

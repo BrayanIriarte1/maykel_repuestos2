@@ -34,8 +34,8 @@ class _MapaUbicacionState extends State<MapaUbicacion> {
           ..src = url
           ..title = 'Mapa de ubicación'
           ..style.border = '10'
-          ..style.width = '50%'
-          ..style.height = '500%'
+          ..style.width = '100%'
+          ..style.height = '100%'
           ..loading = 'lazy'
           ..referrerPolicy = 'no-referrer-when-downgrade';
       });

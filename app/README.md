@@ -9,7 +9,7 @@ navegador, igual que la versión anterior en HTML/JS).
 - [Flutter SDK](https://docs.flutter.dev/get-started/install) 3.16 o
   superior, con soporte web habilitado:
   ```bash
-  flutter config --enable-web
+
   ```
 - Google Chrome instalado (para `flutter run -d chrome` en desarrollo).
 

@@ -33,9 +33,9 @@ class _MapaUbicacionState extends State<MapaUbicacion> {
         return web.HTMLIFrameElement()
           ..src = url
           ..title = 'Mapa de ubicación'
-          ..style.border = '0'
-          ..style.width = '100%'
-          ..style.height = '100%'
+          ..style.border = '10'
+          ..style.width = '50%'
+          ..style.height = '500%'
           ..loading = 'lazy'
           ..referrerPolicy = 'no-referrer-when-downgrade';
       });

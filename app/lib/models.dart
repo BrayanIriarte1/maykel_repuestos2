@@ -726,7 +726,7 @@ class ContenidoSitio {
           texto: 'Este sitio web es operado por Maykel Repuestos, negocio dedicado a la '
               'venta de repuestos automotrices, con domicilio en Vargas #2275, '
               'Calama, Región de Antofagasta, Chile. Para consultas sobre este '
-              'aviso legal, puedes escribir a @.',
+              'aviso legal, puedes escribir a gesma.perez@gmail.com.',
         ),
         SeccionLegal(
           titulo: '2. Objeto del sitio',
@@ -792,8 +792,8 @@ class ContenidoSitio {
         SeccionLegal(
           titulo: '9. Contacto',
           texto: 'Para cualquier consulta sobre este aviso legal, tus datos o el '
-              'funcionamiento del sitio, puedes escribir a @gmail.com '
-              'o por WhatsApp al +56 9 .',
+              'funcionamiento del sitio, puedes escribir a gesma.perez@gmail.com '
+              'o por WhatsApp al +56 9 69170551 .',
         ),
       ],
     );

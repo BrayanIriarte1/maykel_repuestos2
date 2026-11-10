@@ -37,7 +37,6 @@ archivo `.env` no se sube a GitHub.
 ## 3. Correr el servidor
 
 ```bash
-dart pub get
 dart run bin/server.dart
 ```
 

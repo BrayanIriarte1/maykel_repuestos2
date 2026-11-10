@@ -79,7 +79,7 @@ class _AvisoLegalScreenState extends State<AvisoLegalScreen> {
                 Wrap(
                   children: [
                     const Text(
-                      'Para contactarnos directamente, puedes escribir a ',
+                      'Para contactarnos directamente, puedes escribir a gesma.perez@gmail.com',
                       style: TextStyle(fontSize: 14.5, height: 1.75, color: Color(0xFF333333)),
                     ),
                     InkWell(

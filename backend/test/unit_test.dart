@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:test/test.dart';
 
+import '../lib/busqueda.dart';
 import '../lib/pdf_reserva.dart';
 import '../lib/seguridad.dart';
 import '../lib/vehiculos.dart';
@@ -79,6 +80,31 @@ void main() {
       expect(l.bloqueado('b'), isFalse);
       l.reiniciar('a');
       expect(l.bloqueado('a'), isFalse);
+    });
+  });
+
+  group('Búsqueda por palabras', () {
+    test('normaliza tildes, mayúsculas y separa palabras sin repetir', () {
+      expect(palabrasDeBusqueda('  Aceite   CHERY aceite 0W-20 '), ['aceite', 'chery', '0w-20']);
+      expect(normalizarBusqueda('Batería Ñandú'), 'bateria nandu');
+      expect(compactarBusqueda('0W-20'), '0w20');
+    });
+
+    test('una condición por palabra y la forma compacta solo si cambia', () {
+      final params = <String, dynamic>{};
+      final c = condicionesBusqueda('chery 0w-20', params);
+      expect(c.length, 2);
+      expect(c[0].contains('busqueda_compacta'), isFalse);
+      expect(c[1].contains('busqueda_compacta'), isTrue);
+      expect(params['bc1'], '%0w20%');
+      expect(params['bw0'], '%chery%');
+    });
+
+    test('escapa comodines y limita a 6 palabras', () {
+      final params = <String, dynamic>{};
+      condicionesBusqueda('100%', params);
+      expect(params['bw0'], r'%100\%%');
+      expect(palabrasDeBusqueda('a b c d e f g h').length, 6);
     });
   });
 

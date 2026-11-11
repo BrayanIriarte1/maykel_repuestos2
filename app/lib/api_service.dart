@@ -130,7 +130,7 @@ class ApiService {
   }
 
   /// Catálogo paginado desde el servidor (miles de productos): devuelve una página y el total.
-  Future<({List<Repuesto> items, int total})> getRepuestosPagina({
+  Future<({List<Repuesto> items, int total, List<String> sugerencias})> getRepuestosPagina({
     String? buscar,
     String? categoria,
     String? marca,
@@ -154,7 +154,11 @@ class ApiService {
     final items = (data['items'] as List)
         .map((e) => Repuesto.fromJson(e as Map<String, dynamic>))
         .toList();
-    return (items: items, total: (data['total'] as num).toInt());
+    return (
+      items: items,
+      total: (data['total'] as num).toInt(),
+      sugerencias: (data['sugerencias'] as List? ?? []).map((e) => e.toString()).toList(),
+    );
   }
 
   /// Filtro jerárquico Marca -> Modelo y categorías más relevantes, con cantidad de productos.

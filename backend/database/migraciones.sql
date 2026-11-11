@@ -12,6 +12,31 @@ CREATE INDEX IF NOT EXISTS idx_productos_nombre_trgm
 CREATE INDEX IF NOT EXISTS idx_productos_codigo_trgm
   ON productos USING gin (codigo_interno gin_trgm_ops);
 
+-- Búsqueda por palabras en cualquier orden, sin tildes ni mayúsculas.
+-- `busqueda` junta nombre, códigos, marca, modelo y descripción; `busqueda_compacta`
+-- le quita todo lo que no sea letra o número (así "0w20" encuentra "0W-20").
+ALTER TABLE productos ADD COLUMN IF NOT EXISTS busqueda text GENERATED ALWAYS AS (
+  lower(translate(
+    coalesce(nombre, '') || ' ' || coalesce(codigo_interno, '') || ' ' || coalesce(codigo_oem, '') || ' ' ||
+    coalesce(marca_referencia, '') || ' ' || coalesce(modelo_referencia, '') || ' ' ||
+    coalesce(descripcion_tecnica, ''),
+    'áéíóúüñÁÉÍÓÚÜÑ', 'aeiouunAEIOUUN'))
+) STORED;
+
+ALTER TABLE productos ADD COLUMN IF NOT EXISTS busqueda_compacta text GENERATED ALWAYS AS (
+  regexp_replace(lower(translate(
+    coalesce(nombre, '') || ' ' || coalesce(codigo_interno, '') || ' ' || coalesce(codigo_oem, '') || ' ' ||
+    coalesce(marca_referencia, '') || ' ' || coalesce(modelo_referencia, '') || ' ' ||
+    coalesce(descripcion_tecnica, ''),
+    'áéíóúüñÁÉÍÓÚÜÑ', 'aeiouunAEIOUUN')), '[^a-z0-9]', '', 'g')
+) STORED;
+
+CREATE INDEX IF NOT EXISTS idx_productos_busqueda_trgm
+  ON productos USING gin (busqueda gin_trgm_ops);
+
+CREATE INDEX IF NOT EXISTS idx_productos_busqueda_compacta_trgm
+  ON productos USING gin (busqueda_compacta gin_trgm_ops);
+
 -- Filtros más usados del catálogo público y del panel.
 CREATE INDEX IF NOT EXISTS idx_productos_estado_marca
   ON productos (estado_catalogo, marca_referencia, modelo_referencia);

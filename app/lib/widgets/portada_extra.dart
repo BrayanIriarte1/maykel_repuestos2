@@ -5,7 +5,7 @@ import '../config.dart';
 import '../models.dart';
 import 'diseno.dart';
 
-/// Logo de una red o servicio (assets/images/iconos/<nombre>.svg) pintado de [color].
+/// Logo de una red o servicio (assets/images/iconos/`nombre`.svg) pintado de [color].
 class IconoMarca extends StatelessWidget {
   final String nombre;
   final double size;

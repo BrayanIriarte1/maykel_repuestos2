@@ -33,7 +33,7 @@ class _MapaUbicacionState extends State<MapaUbicacion> {
         return web.HTMLIFrameElement()
           ..src = url
           ..title = 'Mapa de ubicación'
-          ..style.border = '10'
+          ..style.border = '0'
           ..style.width = '100%'
           ..style.height = '100%'
           ..loading = 'lazy'

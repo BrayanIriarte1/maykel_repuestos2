@@ -127,6 +127,28 @@ void main() {
       expect(String.fromCharCodes(pdf.sublist(0, 5)), '%PDF-');
     });
 
+    test('búsqueda por palabras en cualquier orden y sin tildes', () async {
+      Future<int> total(String q) async {
+        final r = await http.get(u('/api/repuestos?limite=5&buscar=${Uri.encodeQueryComponent(q)}'));
+        expect(r.statusCode, 200);
+        return (jsonDecode(r.body)['total'] as num).toInt();
+      }
+
+      final base = await total('aceite');
+      expect(base, greaterThan(0));
+      // Mismo resultado sin importar el orden, las mayúsculas o las tildes.
+      expect(await total('ACEITE'), base);
+      final nombre = jsonDecode((await http.get(u('/api/repuestos?limite=1&buscar=aceite'))).body)['items'][0]['nombre'] as String;
+      final palabras = nombre.split(RegExp(r'\s+')).where((w) => w.length > 1).toList();
+      expect(palabras.length, greaterThanOrEqualTo(2));
+      final invertida = palabras.reversed.take(2).join(' ');
+      expect(await total(invertida), greaterThan(0), reason: 'No encontró "$invertida"');
+      // Una palabra del medio sola también debe encontrarlo.
+      expect(await total(palabras.last), greaterThan(0));
+      // Algo inexistente da 0.
+      expect(await total('zzqqxxnoexiste'), 0);
+    });
+
     test('rechaza contacto inválido', () async {
       final r = await http.post(u('/api/reservas'),
           headers: {'Content-Type': 'application/json'},

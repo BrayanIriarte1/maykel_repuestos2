@@ -38,6 +38,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // Catálogo paginado desde el servidor
   List<Repuesto> _items = [];
+  List<String> _sugerencias = [];
   int _total = 0;
   int _totalGeneral = 0;
   int _pagina = 1;
@@ -215,6 +216,7 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         _items = r.items;
         _total = r.total;
+        _sugerencias = r.sugerencias;
         if (_busqueda.trim().isEmpty &&
             _marca == null &&
             _modelo == null &&
@@ -1516,6 +1518,29 @@ class _HomeScreenState extends State<HomeScreen> {
                     const Text('No existen repuestos disponibles para esta configuración.',
                         textAlign: TextAlign.center,
                         style: TextStyle(color: AppColors.char, fontSize: 18, fontWeight: FontWeight.w800)),
+                    if (_sugerencias.isNotEmpty) ...[
+                      const SizedBox(height: 14),
+                      const Text('¿Quisiste decir…?',
+                          style: TextStyle(color: AppColors.steel, fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        alignment: WrapAlignment.center,
+                        children: [
+                          for (final s in _sugerencias)
+                            ActionChip(
+                              avatar: const Icon(Icons.search, size: 16, color: AppColors.red),
+                              label: Text(s),
+                              onPressed: () {
+                                _busquedaCtrl.text = s;
+                                _busqueda = s;
+                                _buscarCatalogo();
+                              },
+                            ),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 16),
                     ElevatedButton.icon(
                       onPressed: _solicitarReservaEspecial,

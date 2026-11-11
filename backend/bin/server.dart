@@ -16,6 +16,7 @@ import 'package:shelf_cors_headers/shelf_cors_headers.dart';
 import 'package:shelf_router/shelf_router.dart';
 import 'package:shelf_static/shelf_static.dart';
 
+import '../lib/busqueda.dart';
 import '../lib/db.dart';
 import '../lib/notificador.dart';
 import '../lib/pdf_reserva.dart';
@@ -793,9 +794,7 @@ void main(List<String> args) async {
     final params = <String, dynamic>{};
 
     if (queryText != null && queryText.isNotEmpty) {
-      conditions.add(
-          '(p.nombre ILIKE @q OR p.codigo_interno ILIKE @q OR p.codigo_oem ILIKE @q OR p.descripcion_tecnica ILIKE @q)');
-      params['q'] = '%${_escaparLike(queryText)}%';
+      conditions.addAll(condicionesBusqueda(queryText, params));
     }
     if (categoriaParam != null && categoriaParam.isNotEmpty) {
       final catId = int.tryParse(categoriaParam);
@@ -945,7 +944,29 @@ void main(List<String> args) async {
     }).toList();
 
     if (limite != null && limite > 0) {
-      return _jsonResponse({'total': total, 'pagina': pagina, 'items': productos});
+      // Sin resultados: sugiere productos parecidos (tolera errores de tipeo con pg_trgm).
+      var sugerencias = <String>[];
+      if (total == 0 && queryText != null && queryText.isNotEmpty) {
+        try {
+          final s = await db.conn.execute(
+            Sql.named('''
+              SELECT p.nombre FROM productos p
+              WHERE p.estado_catalogo = 'PUBLICADO'
+                AND word_similarity(@w, p.busqueda) > 0.4
+              ORDER BY word_similarity(@w, p.busqueda) DESC, p.nombre
+              LIMIT 6
+            '''),
+            parameters: {'w': normalizarBusqueda(queryText)},
+          );
+          sugerencias = s.map((r) => r[0].toString()).toSet().take(4).toList();
+        } catch (_) {}
+      }
+      return _jsonResponse({
+        'total': total,
+        'pagina': pagina,
+        'items': productos,
+        if (sugerencias.isNotEmpty) 'sugerencias': sugerencias,
+      });
     }
     return _jsonResponse(productos);
   }
@@ -1518,8 +1539,7 @@ void main(List<String> args) async {
 
     final q = (qp['q'] ?? '').trim();
     if (q.isNotEmpty) {
-      condiciones.add('(p.nombre ILIKE @q OR p.codigo_interno ILIKE @q OR c.nombre ILIKE @q)');
-      params['q'] = '%${_escaparLike(q.length > 80 ? q.substring(0, 80) : q)}%';
+      condiciones.addAll(condicionesBusqueda(q.length > 80 ? q.substring(0, 80) : q, params));
     }
     final categoria = (qp['categoria'] ?? '').trim();
     if (categoria.isNotEmpty) {

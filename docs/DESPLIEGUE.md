@@ -113,7 +113,7 @@ ssh -i $k $h
 nano /opt/maykel/backend/.env        # Ctrl+O, Enter para guardar; Ctrl+X para salir
 systemctl restart maykel
 ```
-Variables: ver `backend/.env.example` (`SMTP_*`, `EMAIL_DESTINO`, `WHATSAPP_*`, `SISTEMA_EMAIL`, `SISTEMA_PASS`, `CORS_ORIGIN`, `TRUST_PROXY=1`).
+Variables: ver `backend/.env.example` (`SMTP_*`, `EMAIL_DESTINO`, `WHATSAPP_*`, `SISTEMA_EMAIL`, `SISTEMA_PASS`, `CORS_ORIGIN`, `TRUST_PROXY=1`). Para el correo en producción basta con definir `SMTP_USER`, `SMTP_PASS` (contraseña de aplicación de Google) y `EMAIL_DESTINO` en `/opt/maykel/backend/.env` y ejecutar `systemctl restart maykel`; se prueba desde el panel (Configuración → Notificaciones). La sincronización también puede lanzarse a mano desde el panel («Sincronizar ahora», `POST /api/admin/sync/ejecutar`).
 Si cambia la clave del sistema del cliente, solo actualiza `SISTEMA_PASS`.
 
 ### Respaldos

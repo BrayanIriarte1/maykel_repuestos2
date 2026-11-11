@@ -3,7 +3,7 @@
 Sitio en producción: **https://maykel-repuestos2.cl**
 
 ## Cliente (sitio público)
-1. Entrar al sitio y buscar por texto, categoría, marca o modelo del vehículo.
+1. Entrar al sitio y buscar escribiendo **cualquier palabra del producto, en cualquier orden** (por ejemplo «0w20 chery» o «aceite chery»), o filtrar por categoría, marca o modelo. Si no hay resultados, el sitio propone «¿Quisiste decir…?».
 2. Los productos muestran disponibilidad, nunca precio.
 3. Pulsar **Agregar a reserva** en cada repuesto que necesites. Aparece el botón flotante **Mi reserva** con el total de unidades.
 4. En **Mi reserva** ajusta cantidades (o quita repuestos), escribe nombre, teléfono y correo, acepta el tratamiento de datos y pulsa **Finalizar reserva**.

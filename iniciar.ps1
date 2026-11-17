@@ -5,7 +5,10 @@
 param([switch]$Compilar)
 
 $raiz = $PSScriptRoot
-foreach ($c in @("$env:USERPROFILE\flutter\bin", 'C:\flutter\bin', 'C:\src\flutter\bin')) {
+$candidatos = @("$env:USERPROFILE\flutter\bin", 'C:\flutter\bin', 'C:\src\flutter\bin')
+$candidatos += Get-ChildItem "$env:USERPROFILE\Downloads" -Directory -Filter 'flutter*' -ErrorAction SilentlyContinue |
+    ForEach-Object { "$($_.FullName)\flutter\bin", "$($_.FullName)\bin" }
+foreach ($c in $candidatos) {
     if ((Test-Path "$c\flutter.bat") -and -not (Get-Command flutter -ErrorAction SilentlyContinue)) {
         $env:Path = "$c;$c\cache\dart-sdk\bin;" + $env:Path
     }

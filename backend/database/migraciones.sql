@@ -1,3 +1,4 @@
+-- Active: 1793756482913@@127.0.0.1@5432@maykel_repuestos2
 -- ============================================================================
 -- Migraciones idempotentes. El servidor las aplica al arrancar (lib/db.dart).
 -- Se pueden ejecutar tantas veces como se quiera: todo usa IF NOT EXISTS.

@@ -29,7 +29,7 @@ function Subir($origen, $destino) { scp -q -i $Llave -o BatchMode=yes $origen "$
 
 if ($Web) {
     Ejecutar 'Compilando la web (Flutter)' {
-        Push-Location "$raiz\app"; flutter build web --release --no-web-resources-cdn; Pop-Location
+        Push-Location "$raiz\app"; flutter build web --wasm --release --no-web-resources-cdn; Pop-Location
     }
     Ejecutar 'Empaquetando la web' { tar -czf "$tmp\web.tar.gz" -C "$raiz\app\build" web }
     Ejecutar 'Subiendo la web' { Subir "$tmp\web.tar.gz" '/root/web.tar.gz' }

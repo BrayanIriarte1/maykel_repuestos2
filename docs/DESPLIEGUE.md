@@ -51,7 +51,7 @@ Ruta de Dart/Flutter si no están en el PATH: `$env:Path = "C:\Users\chunc\flutt
 ### 1A. Solo cambió el frontend (pantallas, textos, estilos)
 ```powershell
 cd app
-flutter build web --release --no-web-resources-cdn
+flutter build web --wasm --release --no-web-resources-cdn
 cd ..
 tar -czf web.tar.gz -C app\build web
 scp -i $k web.tar.gz "${h}:/root/"

@@ -20,6 +20,16 @@ class Centrado extends StatelessWidget {
       );
 }
 
+/// true si el widget está (aunque sea en parte) dentro de la pantalla.
+/// Las animaciones continuas lo usan para no gastar batería/CPU cuando no se ven.
+bool enPantalla(BuildContext context) {
+  final box = context.findRenderObject();
+  if (box is! RenderBox || !box.attached || !box.hasSize) return false;
+  final arriba = box.localToGlobal(Offset.zero).dy;
+  final alto = MediaQuery.sizeOf(context).height;
+  return arriba < alto && arriba + box.size.height > 0;
+}
+
 /// Eleva y agranda levemente el hijo al pasar el mouse.
 class HoverLift extends StatefulWidget {
   final Widget Function(BuildContext, bool hover) builder;

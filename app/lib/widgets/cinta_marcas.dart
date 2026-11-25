@@ -1,16 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
 import '../config.dart';
 import 'diseno.dart' show logoDeMarca;
+import 'efectos.dart' show enPantalla;
 
 /// Cinta de logos que se desplaza sola de lado a lado (estilo "marcas que nos respaldan").
 /// Se pausa al pasar el mouse y cada logo se puede tocar para filtrar el catálogo.
+///
+/// Pensada para ser liviana en celulares: solo se mueve cuando está en pantalla,
+/// se redibuja aislada del resto (RepaintBoundary) y el difuminado de los bordes
+/// es un degradado encima, no una máscara (que obligaría a recomponer cada cuadro).
 class CintaMarcas extends StatefulWidget {
   final List<String> marcas;
   final void Function(String marca) onTap;
   final bool haciaLaDerecha;
   final double altoLogo;
   final double anchoItem;
+  final Color fondo;
 
   /// Píxeles por segundo.
   final double velocidad;
@@ -23,6 +30,7 @@ class CintaMarcas extends StatefulWidget {
     this.altoLogo = 80,
     this.anchoItem = 220,
     this.velocidad = 45,
+    this.fondo = Colors.white,
   });
 
   @override
@@ -30,7 +38,9 @@ class CintaMarcas extends StatefulWidget {
 }
 
 class _CintaMarcasState extends State<CintaMarcas> with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl;
+  late final Ticker _ticker;
+  final _desplazamiento = ValueNotifier<double>(0);
+  Duration _ultimo = Duration.zero;
   bool _pausada = false;
 
   double get _anchoTira => widget.marcas.length * widget.anchoItem;
@@ -38,90 +48,89 @@ class _CintaMarcasState extends State<CintaMarcas> with SingleTickerProviderStat
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(vsync: this, duration: _duracion())..repeat();
-  }
-
-  Duration _duracion() {
-    final ms = (_anchoTira / widget.velocidad * 1000).round();
-    return Duration(milliseconds: ms < 1000 ? 1000 : ms);
-  }
-
-  @override
-  void didUpdateWidget(covariant CintaMarcas old) {
-    super.didUpdateWidget(old);
-    if (old.marcas.length != widget.marcas.length || old.anchoItem != widget.anchoItem) {
-      _ctrl.duration = _duracion();
-      if (!_pausada) _ctrl.repeat();
-    }
+    _ticker = createTicker((t) {
+      final dt = (t - _ultimo).inMicroseconds / 1e6;
+      _ultimo = t;
+      if (_pausada || _anchoTira <= 0 || !enPantalla(context)) return;
+      _desplazamiento.value =
+          (_desplazamiento.value + widget.velocidad * dt.clamp(0, 0.1)) % _anchoTira;
+    })..start();
   }
 
   @override
   void dispose() {
-    _ctrl.dispose();
+    _ticker.dispose();
+    _desplazamiento.dispose();
     super.dispose();
-  }
-
-  void _pausar(bool p) {
-    if (p == _pausada) return;
-    _pausada = p;
-    p ? _ctrl.stop() : _ctrl.repeat();
   }
 
   @override
   Widget build(BuildContext context) {
     if (widget.marcas.isEmpty) return const SizedBox.shrink();
     final alto = widget.altoLogo + 40;
-    // Se repite la tira las veces necesarias para cubrir pantallas anchas sin huecos.
     final tira = Row(
       mainAxisSize: MainAxisSize.min,
       children: [for (final m in widget.marcas) _item(m)],
     );
+    Widget borde(Alignment inicio) => IgnorePointer(
+          child: Container(
+            width: 60,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: inicio,
+                end: -inicio,
+                colors: [widget.fondo, widget.fondo.withValues(alpha: 0)],
+              ),
+            ),
+          ),
+        );
+
     return MouseRegion(
-      onEnter: (_) => _pausar(true),
-      onExit: (_) => _pausar(false),
+      onEnter: (_) => _pausada = true,
+      onExit: (_) => _pausada = false,
       child: SizedBox(
         height: alto,
         child: LayoutBuilder(builder: (context, c) {
+          // Se repite la tira las veces necesarias para cubrir pantallas anchas sin huecos.
           final copias = (c.maxWidth / _anchoTira).ceil() + 1;
-          return ShaderMask(
-            // Difumina los bordes para que los logos entren y salgan suavemente.
-            shaderCallback: (r) => const LinearGradient(
-              colors: [Colors.transparent, Colors.black, Colors.black, Colors.transparent],
-              stops: [0, 0.07, 0.93, 1],
-            ).createShader(r),
-            blendMode: BlendMode.dstIn,
-            child: ClipRect(
-              child: OverflowBox(
-                alignment: Alignment.centerLeft,
-                minWidth: 0,
-                maxWidth: double.infinity,
-                child: AnimatedBuilder(
-                  animation: _ctrl,
-                  builder: (_, child) {
-                    final t = widget.haciaLaDerecha ? 1 - _ctrl.value : _ctrl.value;
-                    return Transform.translate(offset: Offset(-t * _anchoTira, 0), child: child);
-                  },
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [for (var i = 0; i < copias; i++) tira],
+          return Stack(children: [
+            Positioned.fill(
+              child: RepaintBoundary(
+                child: ClipRect(
+                  child: OverflowBox(
+                    alignment: Alignment.centerLeft,
+                    minWidth: 0,
+                    maxWidth: double.infinity,
+                    child: ValueListenableBuilder<double>(
+                      valueListenable: _desplazamiento,
+                      builder: (_, d, child) {
+                        final x = widget.haciaLaDerecha ? d - _anchoTira : -d;
+                        return Transform.translate(offset: Offset(x, 0), child: child);
+                      },
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [for (var i = 0; i < copias; i++) tira],
+                      ),
+                    ),
                   ),
                 ),
               ),
             ),
-          );
+            Positioned(left: 0, top: 0, bottom: 0, child: borde(Alignment.centerLeft)),
+            Positioned(right: 0, top: 0, bottom: 0, child: borde(Alignment.centerRight)),
+          ]);
         }),
       ),
     );
   }
 
   Widget _item(String marca) {
-    final logo = logoDeMarca(marca);
     return SizedBox(
       width: widget.anchoItem,
       child: Center(
         child: _LogoCinta(
           nombre: marca,
-          logo: logo,
+          logo: logoDeMarca(marca),
           alto: widget.altoLogo,
           ancho: widget.anchoItem - 50,
           onTap: () => widget.onTap(marca),
@@ -165,6 +174,7 @@ class _LogoCintaState extends State<_LogoCinta> {
         color: AppColors.char,
       ),
     );
+    final ratio = MediaQuery.devicePixelRatioOf(context);
     return Tooltip(
       message: 'Ver repuestos ${widget.nombre.toUpperCase()}',
       waitDuration: const Duration(milliseconds: 400),
@@ -186,6 +196,8 @@ class _LogoCintaState extends State<_LogoCinta> {
                   : Image.asset(
                       widget.logo!,
                       fit: BoxFit.contain,
+                      // Decodifica el logo al tamaño en que se muestra (menos memoria).
+                      cacheHeight: (widget.alto * ratio).round(),
                       filterQuality: FilterQuality.medium,
                       errorBuilder: (_, __, ___) =>
                           Center(child: FittedBox(fit: BoxFit.scaleDown, child: texto)),

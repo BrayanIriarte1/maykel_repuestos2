@@ -159,6 +159,8 @@ class _MarquesinaState extends State<Marquesina> with SingleTickerProviderStateM
       final dt = (t - _ultimo).inMicroseconds / 1e6;
       _ultimo = t;
       if (_pausa || !_ctrl.hasClients || !_ctrl.position.hasContentDimensions) return;
+      // Fuera de pantalla no se mueve: ahorra CPU y batería en el celular.
+      if (!enPantalla(context)) return;
       _ctrl.jumpTo(_ctrl.offset + widget.velocidad * dt.clamp(0, 0.1));
     })..start();
   }
@@ -173,7 +175,8 @@ class _MarquesinaState extends State<Marquesina> with SingleTickerProviderStateM
   @override
   Widget build(BuildContext context) {
     if (widget.items.isEmpty) return const SizedBox.shrink();
-    return MouseRegion(
+    // RepaintBoundary: el movimiento solo redibuja la cinta, no toda la página.
+    return RepaintBoundary(
       child: Container(
         height: widget.alto,
         color: widget.fondo,

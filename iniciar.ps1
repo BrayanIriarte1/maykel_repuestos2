@@ -28,7 +28,7 @@ if ($Compilar -or -not (Test-Path "$raiz\app\build\web\index.html")) {
     Write-Host 'Compilando la web (tarda 1-3 minutos)...' -ForegroundColor Yellow
     Push-Location "$raiz\app"
     flutter pub get
-    flutter build web --no-web-resources-cdn
+    flutter build web --wasm --no-web-resources-cdn
     Pop-Location
 }
 

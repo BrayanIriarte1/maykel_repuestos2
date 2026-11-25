@@ -1,5 +1,5 @@
-﻿// Agente local de sincronizaciÃ³n de inventario (RF05, RNF05).
-// Lee un CSV exportado desde el POS o Excel y lo envÃ­a a la plataforma con
+﻿// Agente local de sincronizacion de inventario (RF05, RNF05).
+// Lee un CSV exportado desde el POS o Excel y lo envia a la plataforma con
 // una llamada HTTPS SALIENTE; la sucursal no necesita puertos abiertos.
 //
 // CSV (UTF-8, separador "," o ";", con encabezado). Columnas aceptadas:
@@ -9,11 +9,11 @@
 //
 // Uso (desde backend/):
 //   dart run tools/sync_agent.dart --sistema [--cada 30] [--simular]
-//       Lee el inventario del sistema de gestiÃ³n del cliente (SISTEMA_* en .env).
+//       Lee el inventario del sistema de gestion del cliente (SISTEMA_* en .env).
 //   dart run tools/sync_agent.dart --archivo C:\inventario\stock.csv --url https://tu-dominio.cl --token TU_TOKEN [--cada 30] [--simular]
-// TambiÃ©n acepta las variables SYNC_URL, SYNC_API_TOKEN y SYNC_ARCHIVO (o backend/.env).
+// Tambien acepta las variables SYNC_URL, SYNC_API_TOKEN y SYNC_ARCHIVO (o backend/.env).
 //   --cada N   repite cada N minutos (por defecto una sola vez)
-//   --simular  solo valida el archivo, no envÃ­a nada
+//   --simular  solo valida el archivo, no envia nada
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -62,15 +62,19 @@ ResultadoLectura leerCsv(String contenido) {
   final errores = <String>[];
   if (lineas.isEmpty) return ResultadoLectura([], ['El archivo estÃ¡ vacÃ­o']);
 
-  final sep = lineas.first.split(';').length > lineas.first.split(',').length ? ';' : ',';
-  final cab = _partirLinea(lineas.first, sep).map((e) => e.toLowerCase()).toList();
+  final sep = lineas.first.split(';').length > lineas.first.split(',').length
+      ? ';'
+      : ',';
+  final cab =
+      _partirLinea(lineas.first, sep).map((e) => e.toLowerCase()).toList();
   int idx(List<String> nombres) => cab.indexWhere(nombres.contains);
   final iSku = idx(['codigo_interno', 'codigo', 'cÃ³digo', 'sku']);
   final iNombre = idx(['nombre', 'descripcion', 'descripciÃ³n']);
   final iStock = idx(['stock', 'saldo', 'cantidad']);
   if (iSku < 0 || iStock < 0) {
-    return ResultadoLectura([],
-        ['Faltan columnas obligatorias (codigo_interno y stock). Encabezado leÃ­do: ${cab.join(sep)}']);
+    return ResultadoLectura([], [
+      'Faltan columnas obligatorias (codigo_interno y stock). Encabezado leÃ­do: ${cab.join(sep)}'
+    ]);
   }
 
   final vistos = <String>{};
@@ -97,7 +101,8 @@ ResultadoLectura leerCsv(String contenido) {
     }
     productos.add({
       'codigo_interno': sku,
-      if (iNombre >= 0 && c.length > iNombre && c[iNombre].isNotEmpty) 'nombre': c[iNombre],
+      if (iNombre >= 0 && c.length > iNombre && c[iNombre].isNotEmpty)
+        'nombre': c[iNombre],
       'stock': stock,
     });
   }
@@ -139,24 +144,36 @@ Future<ResultadoLectura> leerSistemaCliente(
   void guardarCookies(http.BaseResponse r) {
     final sc = r.headers['set-cookie'];
     if (sc == null) return;
-    for (final m in RegExp(r'(?:^|,\s*)([A-Za-z0-9_\-]+)=([^;,]*)').allMatches(sc)) {
+    for (final m
+        in RegExp(r'(?:^|,\s*)([A-Za-z0-9_\-]+)=([^;,]*)').allMatches(sc)) {
       final k = m.group(1)!;
-      if (const {'path', 'expires', 'domain', 'samesite', 'secure', 'httponly', 'max-age'}
-          .contains(k.toLowerCase())) {
+      if (const {
+        'path',
+        'expires',
+        'domain',
+        'samesite',
+        'secure',
+        'httponly',
+        'max-age'
+      }.contains(k.toLowerCase())) {
         continue;
       }
       cookies[k] = m.group(2)!;
     }
   }
 
-  String cookieHeader() => cookies.entries.map((e) => '${e.key}=${e.value}').join('; ');
+  String cookieHeader() =>
+      cookies.entries.map((e) => '${e.key}=${e.value}').join('; ');
 
   try {
     final login = await cliente.get(Uri.parse('$base/login'));
     guardarCookies(login);
-    final token = RegExp(r'name="_token" value="([^"]+)"').firstMatch(login.body)?.group(1);
+    final token = RegExp(r'name="_token" value="([^"]+)"')
+        .firstMatch(login.body)
+        ?.group(1);
     if (token == null) {
-      return ResultadoLectura([], ['No se encontrÃ³ el formulario de login en $base']);
+      return ResultadoLectura(
+          [], ['No se encontrÃ³ el formulario de login en $base']);
     }
     final req = http.Request('POST', Uri.parse('$base/login'))
       ..followRedirects = false
@@ -165,14 +182,19 @@ Future<ResultadoLectura> leerSistemaCliente(
     final resp = await http.Response.fromStream(await cliente.send(req));
     guardarCookies(resp);
     final destino = resp.headers['location'] ?? '';
-    if (resp.statusCode < 300 || resp.statusCode >= 400 || destino.contains('/login')) {
-      return ResultadoLectura([], ['Login rechazado por el sistema del cliente (revisa usuario y clave)']);
+    if (resp.statusCode < 300 ||
+        resp.statusCode >= 400 ||
+        destino.contains('/login')) {
+      return ResultadoLectura([], [
+        'Login rechazado por el sistema del cliente (revisa usuario y clave)'
+      ]);
     }
 
     final filas = <int, Map<String, dynamic>>{};
     for (final bodega in bodegas) {
       final r = await cliente.get(
-        Uri.parse('$base/materiales_data/$bodega?draw=1&start=0&length=100000&filtro_estado=todos'),
+        Uri.parse(
+            '$base/materiales_data/$bodega?draw=1&start=0&length=100000&filtro_estado=todos'),
         headers: {
           'Cookie': cookieHeader(),
           'X-Requested-With': 'XMLHttpRequest',
@@ -187,7 +209,8 @@ Future<ResultadoLectura> leerSistemaCliente(
       for (final fila in data) {
         final c = (fila as List<dynamic>).map((e) => e.toString()).toList();
         if (c.length < 9) continue;
-        final id = int.tryParse(RegExp(r'data-id="(\d+)"').firstMatch(c[0])?.group(1) ?? '');
+        final id = int.tryParse(
+            RegExp(r'data-id="(\d+)"').firstMatch(c[0])?.group(1) ?? '');
         if (id == null) continue;
         final stock = int.tryParse(_limpiarHtml(c[2])) ?? 0;
         final habilitado = c[8].contains('checked');
@@ -199,9 +222,12 @@ Future<ResultadoLectura> leerSistemaCliente(
         filas[id] = {
           'id': id,
           'codigo': _limpiarHtml(c[4]),
-          'nombre': _nombreUtil(_limpiarHtml(c[0]), _limpiarHtml(c[1]), _limpiarHtml(c[4]), id),
+          'nombre': _nombreUtil(
+              _limpiarHtml(c[0]), _limpiarHtml(c[1]), _limpiarHtml(c[4]), id),
           'categoria': _limpiarHtml(c[1]),
-          'precio': int.tryParse(_limpiarHtml(c[5]).replaceAll(RegExp(r'[^0-9]'), '')) ?? 0,
+          'precio': int.tryParse(
+                  _limpiarHtml(c[5]).replaceAll(RegExp(r'[^0-9]'), '')) ??
+              0,
           'stock': habilitado ? (stock < 0 ? 0 : stock) : 0,
         };
       }
@@ -209,7 +235,8 @@ Future<ResultadoLectura> leerSistemaCliente(
 
     final porCodigo = <String, int>{};
     for (final f in filas.values) {
-      porCodigo[f['codigo'] as String] = (porCodigo[f['codigo'] as String] ?? 0) + 1;
+      porCodigo[f['codigo'] as String] =
+          (porCodigo[f['codigo'] as String] ?? 0) + 1;
     }
     final productos = <Map<String, dynamic>>[];
     for (final f in filas.values) {
@@ -240,8 +267,8 @@ class FuenteSistema {
   FuenteSistema(this.url, this.email, this.clave, this.bodegas);
 }
 
-Future<bool> sincronizarUnaVez(
-    String? archivo, FuenteSistema? sistema, String url, String token, bool simular) async {
+Future<bool> sincronizarUnaVez(String? archivo, FuenteSistema? sistema,
+    String url, String token, bool simular) async {
   final marca = DateTime.now().toIso8601String();
   late final ResultadoLectura lectura;
   String origen;
@@ -265,7 +292,8 @@ Future<bool> sincronizarUnaVez(
     stderr.writeln('[$marca] No hay productos vÃ¡lidos para enviar.');
     return false;
   }
-  print('[$marca] ${lectura.productos.length} productos vÃ¡lidos desde $origen');
+  print(
+      '[$marca] ${lectura.productos.length} productos vÃ¡lidos desde $origen');
   if (simular) {
     print('Modo simulaciÃ³n: no se enviÃ³ nada.');
     return true;
@@ -312,19 +340,23 @@ Future<bool> sincronizarUnaVez(
           try {
             final d = jsonDecode(r.body) as Map<String, dynamic>;
             acumProcesados += (d['total_procesados'] as num?)?.toInt() ?? 0;
-            acumAgotados += (d['total_agotados_marcados'] as num?)?.toInt() ?? 0;
-            acumNuevos += (d['nuevos_pendientes_catalogacion'] as num?)?.toInt() ?? 0;
+            acumAgotados +=
+                (d['total_agotados_marcados'] as num?)?.toInt() ?? 0;
+            acumNuevos +=
+                (d['nuevos_pendientes_catalogacion'] as num?)?.toInt() ?? 0;
           } catch (_) {}
           if (n == 1 || esUltimo) print('  Lote $n/$totalLotes: ${r.body}');
           enviado = true;
         } else if (r.statusCode == 401 || r.statusCode == 503) {
-          stderr.writeln('  Servidor rechazÃ³ el envÃ­o (${r.statusCode}): ${r.body}');
+          stderr.writeln(
+              '  Servidor rechazÃ³ el envÃ­o (${r.statusCode}): ${r.body}');
           return false;
         } else {
           stderr.writeln('  Intento $intento fallÃ³ (${r.statusCode})');
         }
       } catch (e) {
-        stderr.writeln('  Intento $intento: no se pudo conectar con el servidor de la tienda ($url). '
+        stderr.writeln(
+            '  Intento $intento: no se pudo conectar con el servidor de la tienda ($url). '
             '¿Está encendido? Detalle: $e');
       }
       if (!enviado) await Future<void>.delayed(Duration(seconds: 2 * intento));
@@ -371,12 +403,15 @@ Future<void> main(List<String> args) async {
   }
 
   if ((archivo == null && sistema == null) || (token == null && !simular)) {
-    stderr.writeln('Uso: dart run tools/sync_agent.dart (--sistema | --archivo <csv>) [--url <https://...>] [--token <token>] [--cada 30] [--simular]');
+    stderr.writeln(
+        'Uso: dart run tools/sync_agent.dart (--sistema | --archivo <csv>) [--url <https://...>] [--token <token>] [--cada 30] [--simular]');
     exit(64);
   }
 
   if (cada == null) {
-    exit(await sincronizarUnaVez(archivo, sistema, url, token ?? '', simular) ? 0 : 1);
+    exit(await sincronizarUnaVez(archivo, sistema, url, token ?? '', simular)
+        ? 0
+        : 1);
   }
   print('Agente activo: sincroniza cada $cada min. Ctrl+C para detener.');
   while (true) {

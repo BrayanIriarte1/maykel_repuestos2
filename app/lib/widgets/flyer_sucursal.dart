@@ -156,7 +156,7 @@ class _PanelInferior extends StatelessWidget {
           const FittedBox(
             fit: BoxFit.scaleDown,
             child: Text(
-              'Chery, Great Wall, JAC, MG, Changan, BYD, Maxus y muchas otras.',
+              'Jeep, Dodge, Fiat, Volkswagen, Samsung y muchas otras.',
               style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600),
             ),
           ),

@@ -257,6 +257,8 @@ git add -A; git commit -m "Cambia el logo principal"; git push
 | Ya hice commit y quiero volver atrás | `git revert HEAD` (crea un commit que deshace el último) y vuelve a desplegar |
 | La imagen nueva no aparece | ¿El nombre del archivo es exactamente igual (mayúsculas, `.jpg` vs `.png`)? ¿Recompilaste? ¿Hiciste Ctrl+F5? |
 | La página queda en blanco | Abre la consola con **F12** → pestaña *Console* y mira el error en rojo; corre `flutter analyze` |
+| El servidor no arranca: `address already in use` / `errno = 10048` / puerto 8080 | Ya hay otro servidor abierto (otra terminal, o uno que quedó colgado). Ciérralo con **Ctrl+C** en su terminal, o en PowerShell: `Stop-Process -Id (Get-NetTCPConnection -LocalPort 8080 -State Listen).OwningProcess -Force` |
+| Uso **Git Bash** y no funciona `iniciar.ps1` | Los `.ps1` son de PowerShell. En Git Bash escribe `powershell -ExecutionPolicy Bypass -File iniciar.ps1`, o cambia la terminal de VS Code a PowerShell (flecha ⌄ junto al **+** de la terminal) |
 
 ---
 

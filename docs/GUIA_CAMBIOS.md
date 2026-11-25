@@ -232,6 +232,20 @@ powershell -ExecutionPolicy Bypass -File iniciar.ps1 -Compilar
 ```
 Abre `http://localhost:8080`. Tarda 1–3 minutos en compilar.
 
+### Usuarios para probar el panel (en local)
+Entra a `http://localhost:8080/#/admin` (o el botón **Admin** de la barra). Hay tres usuarios de demostración:
+
+| Usuario | Rol | Qué puede ver |
+|---|---|---|
+| `admin` | Superadministrador | Todo: Inicio, Analítica, Catálogo, Reservas, Stock, Usuarios, Configuración |
+| `daniel` | Superadministrador | Igual que `admin` |
+| `vendedor` | Vendedor | Inicio, Catálogo, Reservas y Stock (sin Usuarios ni Configuración) |
+
+Las contraseñas de demostración están anotadas en `backend/database/schema.sql`, en el comentario que empieza con `-- Contraseñas de demostración` (junto al `INSERT INTO usuarios`).
+Si alguien las cambió desde **Admin → Usuarios**, valen las nuevas.
+
+> En **producción** (`maykel-repuestos2.cl`) estas claves de demostración deben estar cambiadas, porque el repositorio es público. No uses las mismas claves allá.
+
 ### Antes de publicar, revisa que no haya errores
 ```powershell
 cd app; flutter analyze

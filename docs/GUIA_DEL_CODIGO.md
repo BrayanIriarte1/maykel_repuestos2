@@ -2,6 +2,8 @@
 
 Está escrita para **aprender de a poco**. No necesitas memorizar nada: necesitas saber **dónde mirar**.
 
+> ¿Te pidieron cambiar un logo, un texto o un color? Ve directo a **[GUIA_CAMBIOS.md](GUIA_CAMBIOS.md)**: tiene ejemplos paso a paso.
+
 ---
 
 ## 1. La idea general en 30 segundos
@@ -31,7 +33,7 @@ maykel_repuestos2/
 ├─ desplegar.ps1                ← sube los cambios a producción (web y/o backend) con un comando
 ├─ app/                         ← FRONTEND (Flutter / Dart)
 │  ├─ pubspec.yaml              ← paquetes y assets (imágenes)
-│  ├─ assets/images/            ← logo y fotos referenciales (repuestos/ + CREDITOS.md)
+│  ├─ assets/images/            ← logo, flyer, logos de marcas (marcas/) y fotos referenciales (repuestos/)
 │  ├─ assets/fonts/             ← Roboto (licencia Apache 2.0) para los PDF con tildes y ñ
 │  └─ lib/
 │     ├─ main.dart              ← arranque: restaura sesión, rutas (#/admin)
@@ -39,12 +41,15 @@ maykel_repuestos2/
 │     ├─ models.dart            ← clases de datos: Repuesto, Reserva, Venta, DashboardData, ContenidoSitio…
 │     ├─ api_service.dart       ← TODAS las llamadas HTTP al backend
 │     ├─ screens/
-│     │  ├─ home_screen.dart    ← portada pública (hero, marcas, categorías, catálogo…)  ~1500 líneas
-│     │  ├─ admin_screen.dart   ← panel admin/vendedor (sidebar, Inicio, Analítica, Config…) ~2750 líneas
+│     │  ├─ home_screen.dart    ← portada pública (hero, marcas, categorías, catálogo…)  ~2200 líneas
+│     │  ├─ admin_screen.dart   ← panel admin/vendedor (sidebar, Inicio, Analítica, Config…) ~2650 líneas
 │     │  └─ aviso_legal_screen.dart
 │     ├─ widgets/               ← piezas reutilizables
 │     │  ├─ product_card.dart, carrusel_productos.dart, reserva_dialog.dart
 │     │  ├─ admin_login_dialog.dart, admin_inventario.dart (tabla de stock), admin_reservas.dart
+│     │  ├─ cinta_marcas.dart   ← cinta de logos de marcas en movimiento (sección "marcas chinas")
+│     │  ├─ flyer_sucursal.dart ← flyer de la casa matriz al abrir + botón WhatsApp
+│     │  ├─ portada_extra.dart  ← íconos de redes, contador animado, horario en la barra
 │     │  ├─ diseno.dart         ← Revelar, Marquesina, TarjetaMarca/Categoría/Info, fotos referenciales
 │     │  └─ efectos.dart        ← HoverLift, TituloSeccion, Centrado, iconos por categoría
 │     └─ utils/                 ← formato CLP, PDF de reportes, carrito.dart (lista de reserva), descarga.dart, sesión (sessionStorage)
@@ -172,6 +177,7 @@ Tarea programada → `tools/sync_programado.ps1` → `tools/sync_agent.dart --si
 
 | Quiero… | Dónde |
 |---|---|
+| Cambiar **logo, texto o color** (paso a paso) | [GUIA_CAMBIOS.md](GUIA_CAMBIOS.md) |
 | Cambiar un **texto** de la portada | Lo más fácil: **Admin → Configuración**. Los valores por defecto están en `models.dart` (`ContenidoSitio.porDefecto`) y `server.dart` (`contenidoPorDefecto`) |
 | Cambiar **colores** | `app/lib/config.dart` → `AppColors` |
 | Cambiar el **orden o quitar una sección** de la portada | `home_screen.dart` → método `build` |

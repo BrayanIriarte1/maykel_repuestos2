@@ -9,8 +9,10 @@ import '../models.dart';
 import '../utils/carrito.dart';
 import '../widgets/admin_login_dialog.dart';
 import '../widgets/carrusel_productos.dart';
+import '../widgets/cinta_marcas.dart';
 import '../widgets/diseno.dart';
 import '../widgets/efectos.dart';
+import '../widgets/flyer_sucursal.dart';
 import '../widgets/mapa_ubicacion.dart';
 import '../widgets/portada_extra.dart';
 import '../widgets/product_card.dart';
@@ -69,6 +71,10 @@ class _HomeScreenState extends State<HomeScreen> {
     _cargarProductos();
     _cargarContenido();
     _cargarEstado();
+    // Lo primero que se ve al abrir la página: el flyer de la casa matriz.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) mostrarFlyerSucursal(context);
+    });
     // El stock cambia con cada sincronización (cada 30 min) y con cada venta:
     // el catálogo se actualiza solo cada 2 minutos mientras la pestaña esté abierta.
     _autoRefresco = Timer.periodic(const Duration(minutes: 2), (_) => _refrescarSilencioso());
@@ -342,24 +348,33 @@ class _HomeScreenState extends State<HomeScreen> {
                     style: TextStyle(fontSize: esAngosto ? 15 : 18, color: AppColors.steel)),
               ]),
             ),
-            const SizedBox(height: 44),
-            Wrap(
-              alignment: WrapAlignment.center,
-              spacing: 22,
-              runSpacing: 22,
-              children: [
-                for (var i = 0; i < _marcasTop.length; i++)
-                  Revelar(
-                    retrasoMs: (i % 7) * 60,
-                    child: TarjetaMarca(
-                      nombre: _marcasTop[i].$1,
-                      total: _marcasTop[i].$2,
-                      seleccionada: _marca == _marcasTop[i].$1,
-                      onTap: () => _irAMarca(_marcasTop[i].$1),
-                    ),
+            SizedBox(height: esAngosto ? 28 : 44),
+            // Logos en movimiento (dos cintas en sentidos opuestos si hay muchas marcas).
+            Builder(builder: (_) {
+              final nombres = [for (final m in _marcasTop) m.$1];
+              final dosFilas = nombres.length > 8;
+              final mitad = (nombres.length / 2).ceil();
+              final alto = esAngosto ? 56.0 : 80.0;
+              final ancho = esAngosto ? 160.0 : 230.0;
+              return Column(children: [
+                CintaMarcas(
+                  marcas: dosFilas ? nombres.sublist(0, mitad) : nombres,
+                  onTap: _irAMarca,
+                  altoLogo: alto,
+                  anchoItem: ancho,
+                ),
+                if (dosFilas) ...[
+                  SizedBox(height: esAngosto ? 8 : 18),
+                  CintaMarcas(
+                    marcas: nombres.sublist(mitad),
+                    onTap: _irAMarca,
+                    haciaLaDerecha: true,
+                    altoLogo: alto,
+                    anchoItem: ancho,
                   ),
-              ],
-            ),
+                ],
+              ]);
+            }),
           ],
         ),
       ),

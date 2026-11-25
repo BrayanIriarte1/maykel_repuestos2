@@ -31,6 +31,7 @@ flutter:
   assets:
     - assets/images/logo.jpg
     - assets/images/logo_maykel.jpg
+    - assets/images/flyer_sucursal.jpg
     - assets/images/repuestos/
     - assets/images/marcas/
     - assets/images/iconos/

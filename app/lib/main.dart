@@ -56,7 +56,7 @@ class _MaykelRepuestosAppState extends State<MaykelRepuestosApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Maykel Repuestos',
+      title: 'Maykel Repuestos 2 | Repuestos automotrices en Calama',
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(),
       navigatorKey: _navigatorKey,

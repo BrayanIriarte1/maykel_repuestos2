@@ -5,31 +5,85 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="Catálogo de repuestos automotrices de Maykel Repuestos — Calama, Chile.">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!-- Buscadores (Google): título, descripción y dirección oficial del sitio -->
+  <title>Maykel Repuestos 2 | Repuestos automotrices en Calama</title>
+  <meta name="description" content="Maykel Repuestos 2: repuestos para autos y marcas chinas e insumos mineros en Calama, Chile. Vargas #2275. Revisa el catálogo, consulta stock y reserva en línea.">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://maykel-repuestos2.cl/">
+
+  <!-- Vista previa al compartir el link (WhatsApp, Facebook, etc.) -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Maykel Repuestos 2">
+  <meta property="og:title" content="Maykel Repuestos 2 | Repuestos automotrices en Calama">
+  <meta property="og:description" content="Repuestos para autos y marcas chinas en Calama. Catálogo en línea, consulta stock y reserva.">
+  <meta property="og:url" content="https://maykel-repuestos2.cl/">
+  <meta property="og:image" content="https://maykel-repuestos2.cl/logo-maykel.jpg">
+  <meta property="og:locale" content="es_CL">
+
+  <!-- Ficha del negocio para Google (dirección, horario, teléfono) -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "AutoPartsStore",
+    "name": "Maykel Repuestos 2",
+    "alternateName": ["Maykel Repuestos", "Maykel Repuestos Limitada"],
+    "url": "https://maykel-repuestos2.cl/",
+    "logo": "https://maykel-repuestos2.cl/logo-maykel.jpg",
+    "image": "https://maykel-repuestos2.cl/logo-maykel.jpg",
+    "telephone": "+56969170551",
+    "priceRange": "$$",
+    "address": {
+      "@type": "PostalAddress",
+      "streetAddress": "Vargas 2275",
+      "addressLocality": "Calama",
+      "addressRegion": "Antofagasta",
+      "addressCountry": "CL"
+    },
+    "geo": { "@type": "GeoCoordinates", "latitude": -22.4607923, "longitude": -68.9285291 },
+    "hasMap": "https://www.google.com/maps/place/Maykel+Repuestos/@-22.4608953,-68.9286172,21z",
+    "openingHoursSpecification": [
+      { "@type": "OpeningHoursSpecification",
+        "dayOfWeek": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+        "opens": "09:00", "closes": "18:30" },
+      { "@type": "OpeningHoursSpecification",
+        "dayOfWeek": "Saturday", "opens": "09:30", "closes": "14:00" }
+    ]
+  }
+  </script>
 
   <!-- iOS meta tags & icons -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="Maykel Repuestos">
+  <meta name="apple-mobile-web-app-title" content="Maykel Repuestos 2">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>Maykel Repuestos — Catálogo</title>
   <link rel="manifest" href="manifest.json">
 
   <style>
     html, body { height: 100%; margin: 0; background: #1A1A1C; }
     #loading {
-      position: fixed; inset: 0; display: flex; align-items: center;
-      justify-content: center; color: #F2EFE9; font-family: Arial, sans-serif;
-      font-size: 14px; letter-spacing: .04em;
+      position: fixed; inset: 0; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; text-align: center;
+      color: #F2EFE9; font-family: Arial, sans-serif; padding: 24px;
     }
+    #loading h1 { font-size: 22px; margin: 0 0 8px; letter-spacing: .04em; }
+    #loading p { font-size: 14px; margin: 4px 0; opacity: .75; max-width: 520px; }
   </style>
 </head>
 <body>
-  <div id="loading">Cargando Maykel Repuestos…</div>
+  <!-- Texto real en el HTML: lo lee Google (Flutter dibuja en un lienzo que
+       los buscadores no entienden bien) y se ve mientras carga la página. -->
+  <main id="loading">
+    <h1>Maykel Repuestos 2</h1>
+    <p>Repuestos automotrices para marcas chinas e insumos mineros en Calama, Chile.</p>
+    <p>Vargas #2275, Calama · Lunes a viernes 9:00–18:30 · Sábado 9:30–14:00</p>
+    <p>Cargando catálogo…</p>
+  </main>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

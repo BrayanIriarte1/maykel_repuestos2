@@ -869,7 +869,10 @@ class _HomeScreenState extends State<HomeScreen> {
             child: SingleChildScrollView(
               controller: _scrollController,
               child: Column(
+                // Cada sección en su propia capa (RepaintBoundary): al desplazarse, pasar
+                // el mouse o animarse algo, solo se redibuja esa sección y no la página entera.
                 children: [
+                  for (final seccion in <Widget>[
                   _buildHero(esAngosto),
                   _buildMarquesina(),
                   _buildInfoCards(esAngosto),
@@ -913,6 +916,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   Container(key: _catalogoKey, child: _buildCatalogo(esAngosto)),
                   Container(key: _contactoKey, child: Revelar(child: _buildContacto(esAngosto))),
                   _buildFooter(esAngosto),
+                  ])
+                    RepaintBoundary(child: seccion),
                 ],
               ),
             ),

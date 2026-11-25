@@ -45,7 +45,8 @@ class _CarruselProductosState extends State<CarruselProductos> {
           t.cancel();
           return;
         }
-        if (!_pausa) _mover(1, ciclico: true);
+        // Fuera de pantalla no avanza (no gasta CPU en algo que nadie ve).
+        if (!_pausa && enPantalla(context)) _mover(1, ciclico: true);
       });
     }
   }
@@ -255,7 +256,7 @@ class _HeroCarruselState extends State<HeroCarrusel> {
         t.cancel();
         return;
       }
-      if (!_ctrl.hasClients || widget.productos.isEmpty) return;
+      if (!_ctrl.hasClients || widget.productos.isEmpty || !enPantalla(context)) return;
       final sig = (_actual + 1) % widget.productos.length;
       _ctrl.animateToPage(sig,
           duration: const Duration(milliseconds: 600), curve: Curves.easeInOut);

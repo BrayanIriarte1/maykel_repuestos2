@@ -1,4 +1,4 @@
-﻿# CrÃ©ditos de imÃ¡genes de repuestos
+# Créditos de imágenes de repuestos
 
 Fotos referenciales de Wikimedia Commons, usadas bajo sus licencias (se muestran como "Imagen referencial" mientras el producto no tenga su foto propia).
 

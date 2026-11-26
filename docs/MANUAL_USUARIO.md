@@ -29,6 +29,6 @@ Demo de cada rol. Ejercicio: crear una reserva con 2 repuestos → confirmarla �
 
 ## Panel: novedades
 - **Inicio / Analítica / Catálogo / Reservas / Stock / Usuarios / Configuración** rediseñados: tarjetas con indicadores, tablero de reservas por estado, catálogo en cuadrícula con fotos y paginación, usuarios y roles en tarjetas.
-- **Configuración → Notificaciones y sincronización:** estado del correo y WhatsApp, botones de prueba, guía para la contraseña de aplicación de Google y botón **Sincronizar ahora** con el historial.
+- **Configuración → Notificaciones y sincronización:** estado del correo y WhatsApp, botones de prueba (se activan cuando el canal está configurado) y botón **Sincronizar ahora** con el historial.
 - El cliente recibe un correo con su comprobante PDF al reservar (si el correo está configurado en el servidor).
 

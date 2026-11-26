@@ -149,7 +149,7 @@ class SeccionCarrusel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (productos.isEmpty) return const SizedBox.shrink();
-    final esAngosto = MediaQuery.of(context).size.width < 760;
+    final esAngosto = MediaQuery.sizeOf(context).width < 760;
     final sobreOscuro = oscuro || rojo;
     final fondo = rojo
         ? const LinearGradient(

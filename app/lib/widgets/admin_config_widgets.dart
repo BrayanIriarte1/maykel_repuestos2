@@ -1183,19 +1183,28 @@ class UsrAvatar extends StatelessWidget {
 class UsrMiniStat extends StatelessWidget {
   final String valor;
   final String etiqueta;
-  const UsrMiniStat(this.valor, this.etiqueta, {super.key});
+  /// [sobreOscuro]: true dentro del banner oscuro; false sobre el fondo claro
+  /// (pantallas angostas), donde el texto blanco no se vería.
+  final bool sobreOscuro;
+  const UsrMiniStat(this.valor, this.etiqueta, {super.key, this.sobreOscuro = true});
 
   @override
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.1),
+          color: sobreOscuro ? Colors.white.withValues(alpha: 0.1) : Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white24),
+          border: Border.all(color: sobreOscuro ? Colors.white24 : AdminColores.borde),
         ),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text(valor, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900, height: 1.1)),
-          Text(etiqueta, style: const TextStyle(color: Colors.white70, fontSize: 11.5)),
+          Text(valor,
+              style: TextStyle(
+                  color: sobreOscuro ? Colors.white : AppColors.char,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w900,
+                  height: 1.1)),
+          Text(etiqueta,
+              style: TextStyle(color: sobreOscuro ? Colors.white70 : AppColors.steel, fontSize: 11.5)),
         ]),
       );
 }

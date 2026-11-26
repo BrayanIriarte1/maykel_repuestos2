@@ -110,13 +110,19 @@ class KpiTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, c) => _tarjeta(c.maxWidth < 220));
+  }
+
+  /// [compacta]: tarjeta angosta (2 columnas en celular). Ícono y márgenes más
+  /// chicos para que la etiqueta no se corte a mitad de palabra.
+  Widget _tarjeta(bool compacta) {
     return MouseRegion(
       cursor: onTap == null ? MouseCursor.defer : SystemMouseCursors.click,
       child: GestureDetector(
         onTap: onTap,
         child: Container(
           clipBehavior: Clip.hardEdge,
-          padding: const EdgeInsets.all(20),
+          padding: EdgeInsets.all(compacta ? 14 : 20),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(22),
@@ -133,8 +139,8 @@ class KpiTile extends StatelessWidget {
                 child: Icon(icono, size: 110, color: colores.first.withValues(alpha: 0.07)),
               ),
               Row(children: [
-                InsigniaIcono(icono: icono, tam: 54, colores: colores),
-                const SizedBox(width: 16),
+                InsigniaIcono(icono: icono, tam: compacta ? 38 : 54, colores: colores),
+                SizedBox(width: compacta ? 10 : 16),
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     FittedBox(
@@ -148,7 +154,7 @@ class KpiTile extends StatelessWidget {
                     Text(etiqueta,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 13, color: AppColors.steel, height: 1.25)),
+                        style: TextStyle(fontSize: compacta ? 12 : 13, color: AppColors.steel, height: 1.25)),
                     if (nota != null)
                       Padding(
                         padding: const EdgeInsets.only(top: 4),
@@ -209,7 +215,9 @@ class AdminHero extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       clipBehavior: Clip.hardEdge,
-      padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 26),
+      padding: MediaQuery.sizeOf(context).width < 600
+          ? const EdgeInsets.all(18)
+          : const EdgeInsets.symmetric(horizontal: 30, vertical: 26),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(26),
         gradient: LinearGradient(colors: colores, begin: Alignment.topLeft, end: Alignment.bottomRight),
@@ -231,20 +239,35 @@ class AdminHero extends StatelessWidget {
                   width: 180,
                   height: 180,
                   decoration: BoxDecoration(shape: BoxShape.circle, color: AppColors.red.withValues(alpha: 0.18)))),
-          Row(children: [
-            InsigniaIcono(icono: icono, tam: 62),
-            const SizedBox(width: 18),
-            Expanded(
+          LayoutBuilder(builder: (context, c) {
+            // En pantallas angostas (celular) los botones bajan bajo el título;
+            // si no, le quitan todo el ancho al texto.
+            final angosto = c.maxWidth < 640;
+            final textos = Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(titulo,
-                    style: const TextStyle(
-                        color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900, height: 1.15)),
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: angosto ? 21 : 26,
+                        fontWeight: FontWeight.w900,
+                        height: 1.15)),
                 const SizedBox(height: 4),
-                Text(subtitulo, style: const TextStyle(color: Colors.white70, fontSize: 14.5)),
+                Text(subtitulo, style: TextStyle(color: Colors.white70, fontSize: angosto ? 13 : 14.5)),
               ]),
-            ),
-            if (derecha != null) derecha!,
-          ]),
+            );
+            final cabecera = Row(children: [
+              InsigniaIcono(icono: icono, tam: angosto ? 48 : 62),
+              SizedBox(width: angosto ? 14 : 18),
+              textos,
+              if (!angosto && derecha != null) derecha!,
+            ]);
+            if (!angosto || derecha == null) return cabecera;
+            return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              cabecera,
+              const SizedBox(height: 16),
+              derecha!,
+            ]);
+          }),
         ],
       ),
     );

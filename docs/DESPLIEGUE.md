@@ -113,7 +113,7 @@ ssh -i $k $h
 nano /opt/maykel/backend/.env        # Ctrl+O, Enter para guardar; Ctrl+X para salir
 systemctl restart maykel
 ```
-Variables: ver `backend/.env.example` (`SMTP_*`, `EMAIL_DESTINO`, `WHATSAPP_*`, `SISTEMA_EMAIL`, `SISTEMA_PASS`, `CORS_ORIGIN`, `TRUST_PROXY=1`). Para el correo en producción basta con definir `SMTP_USER`, `SMTP_PASS` (contraseña de aplicación de Google) y `EMAIL_DESTINO` en `/opt/maykel/backend/.env` y ejecutar `systemctl restart maykel`; se prueba desde el panel (Configuración → Notificaciones). La sincronización también puede lanzarse a mano desde el panel («Sincronizar ahora», `POST /api/admin/sync/ejecutar`).
+Variables: ver `backend/.env.example` (`SMTP_*`, `EMAIL_DESTINO`, `WHATSAPP_*`, `SISTEMA_EMAIL`, `SISTEMA_PASS`, `CORS_ORIGIN`, `TRUST_PROXY=1`). Para el correo en producción basta con definir `SMTP_USER`, `SMTP_PASS` (contraseña de aplicación de Google) y `EMAIL_DESTINO` en `/opt/maykel/backend/.env` y ejecutar `systemctl restart maykel`; se prueba desde el panel (Configuración → Notificaciones). Para generar la contraseña de aplicación (solo el equipo de desarrollo; el panel ya no muestra esta guía al cliente): en la cuenta de Gmail que envía, activar la verificación en 2 pasos, abrir myaccount.google.com/apppasswords, crear una con el nombre «Maykel Repuestos» y copiar las 16 letras en `SMTP_PASS` (sin espacios). La sincronización también puede lanzarse a mano desde el panel («Sincronizar ahora», `POST /api/admin/sync/ejecutar`).
 Si cambia la clave del sistema del cliente, solo actualiza `SISTEMA_PASS`.
 
 ### Respaldos

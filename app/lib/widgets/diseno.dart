@@ -101,7 +101,7 @@ class _RevelarState extends State<Revelar> {
     final box = context.findRenderObject();
     if (box is! RenderBox || !box.attached || !box.hasSize) return;
     final arriba = box.localToGlobal(Offset.zero).dy;
-    if (arriba < MediaQuery.of(context).size.height * 0.92) {
+    if (arriba < MediaQuery.sizeOf(context).height * 0.92) {
       _pos?.removeListener(_revisar);
       Future.delayed(Duration(milliseconds: widget.retrasoMs), () {
         if (mounted) setState(() => _visible = true);

@@ -106,7 +106,7 @@ class _ContadorAnimadoState extends State<ContadorAnimado> {
     if (_activo || !mounted) return;
     final box = context.findRenderObject();
     if (box is! RenderBox || !box.attached || !box.hasSize) return;
-    if (box.localToGlobal(Offset.zero).dy < MediaQuery.of(context).size.height * 0.95) {
+    if (box.localToGlobal(Offset.zero).dy < MediaQuery.sizeOf(context).height * 0.95) {
       _pos?.removeListener(_revisar);
       setState(() => _activo = true);
     }

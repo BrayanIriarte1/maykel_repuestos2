@@ -127,11 +127,16 @@ class _AdminScreenState extends State<AdminScreen> {
     // El resumen, las reservas y las ventas se actualizan solos cada minuto
     // (llegan reservas nuevas y la sincronización cambia el stock).
     _auto = Timer.periodic(const Duration(seconds: 30), (_) => _cargarResumen());
+    // Al volver a la pestaña se pone al día de inmediato (en segundo plano no refresca).
+    _ciclo = AppLifecycleListener(onResume: _cargarResumen);
   }
+
+  late final AppLifecycleListener _ciclo;
 
   @override
   void dispose() {
     _auto?.cancel();
+    _ciclo.dispose();
     _ventaDebounce?.cancel();
     _ventaBusquedaCtrl.dispose();
     _ventaCantidadCtrl.dispose();
@@ -186,7 +191,7 @@ class _AdminScreenState extends State<AdminScreen> {
 
   /// Refresco silencioso (sin spinner) de reservas, ventas y KPIs.
   Future<void> _cargarResumen() async {
-    if (!mounted || _cargando) return;
+    if (!mounted || _cargando || !pestanaVisible()) return;
     try {
       final r = await _pedirDatos();
       if (!mounted) return;
@@ -203,8 +208,9 @@ class _AdminScreenState extends State<AdminScreen> {
       if (antes >= 0 && ahora > antes && _sesion.puede('reservas')) {
         final ultima = _reservas.firstWhere((x) => x.estado == 'pendiente');
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('🔔 Nueva reserva ${ultima.id} de ${ultima.nombre}'),
+          content: Text('Nueva reserva ${ultima.id} de ${ultima.nombre}'),
           duration: const Duration(seconds: 8),
+          persist: false,
           action: SnackBarAction(
               label: 'VER', onPressed: () => setState(() => _seccionActiva = 'reservas')),
         ));
@@ -364,7 +370,7 @@ class _AdminScreenState extends State<AdminScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final ancho = MediaQuery.of(context).size.width;
+    final ancho = MediaQuery.sizeOf(context).width;
     final esAngosto = ancho < 900;
 
     return Scaffold(
@@ -508,7 +514,7 @@ class _AdminScreenState extends State<AdminScreen> {
             hoverColor: Colors.white.withValues(alpha: 0.07),
             onTap: () {
               setState(() => _seccionActiva = s.clave);
-              if (MediaQuery.of(context).size.width < 900) {
+              if (MediaQuery.sizeOf(context).width < 900) {
                 Navigator.of(context).maybePop();
               }
             },
@@ -687,7 +693,7 @@ class _AdminScreenState extends State<AdminScreen> {
             ),
           ),
         if (total == 0)
-          const PopupMenuItem(enabled: false, child: Text('Sin novedades 🎉')),
+          const PopupMenuItem(enabled: false, child: Text('Sin novedades')),
       ],
       child: Stack(
         clipBehavior: Clip.none,
@@ -754,7 +760,7 @@ class _AdminScreenState extends State<AdminScreen> {
         padding: const EdgeInsets.all(24),
         children: [
           AdminHero(
-            titulo: 'Hola, ${_sesion.usuario.isEmpty ? "administrador" : _sesion.usuario} 👋',
+            titulo: 'Hola, ${_sesion.usuario.isEmpty ? "administrador" : _sesion.usuario}',
             subtitulo:
                 '${_saludoDia()} · ${_sesion.esSuperAdmin ? 'Propietario' : (_sesion.rolNombre ?? 'Equipo')}'
                 '${_pendientes > 0 && _sesion.puede('reservas') ? ' · Tienes $_pendientes reserva${_pendientes == 1 ? '' : 's'} por atender' : ''}',
@@ -914,7 +920,7 @@ class _AdminScreenState extends State<AdminScreen> {
           ? const Padding(
               padding: EdgeInsets.symmetric(vertical: 24),
               child: Center(
-                  child: Text('¡Todo al día! No hay reservas pendientes. 🎉',
+                  child: Text('¡Todo al día! No hay reservas pendientes.',
                       style: TextStyle(color: AppColors.steel))),
             )
           : Column(children: [
@@ -1356,7 +1362,7 @@ class _AdminScreenState extends State<AdminScreen> {
               child: _tablaSimple(
                 columnas: const ['Producto', 'Categoría'],
                 filas: agotadosConCategoria.isEmpty
-                    ? [const ['No hay productos agotados. 🎉', '']]
+                    ? [const ['No hay productos agotados.', '']]
                     : agotadosConCategoria
                         .map((p) => [p.nombre, p.categoria.isEmpty ? 'Otros' : p.categoria])
                         .toList(),
@@ -1504,23 +1510,33 @@ class _AdminScreenState extends State<AdminScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [
-            const InsigniaIcono(icono: Icons.point_of_sale_outlined, tam: 44, colores: AdminColores.violeta),
-            const SizedBox(width: 14),
-            const Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('Registrar venta de mostrador',
-                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 17, color: AppColors.char)),
-                Text('Descuenta el stock al instante y queda reflejada en Analítica.',
-                    style: TextStyle(fontSize: 12.5, color: AppColors.steel)),
-              ]),
-            ),
-            OutlinedButton.icon(
+          LayoutBuilder(builder: (context, c) {
+            final pdf = OutlinedButton.icon(
               onPressed: _descargarPdfVentas,
               icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
               label: const Text('Ventas en PDF'),
-            ),
-          ]),
+            );
+            final titulo = Row(children: [
+              const InsigniaIcono(icono: Icons.point_of_sale_outlined, tam: 44, colores: AdminColores.violeta),
+              const SizedBox(width: 14),
+              const Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('Registrar venta de mostrador',
+                      style: TextStyle(fontWeight: FontWeight.w900, fontSize: 17, color: AppColors.char)),
+                  Text('Descuenta el stock al instante y queda reflejada en Analítica.',
+                      style: TextStyle(fontSize: 12.5, color: AppColors.steel)),
+                ]),
+              ),
+              if (c.maxWidth >= 560) pdf,
+            ]);
+            // En celular el botón baja para no aplastar el título.
+            if (c.maxWidth >= 560) return titulo;
+            return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              titulo,
+              const SizedBox(height: 12),
+              pdf,
+            ]);
+          }),
           const SizedBox(height: 18),
           Wrap(
             spacing: 14,
@@ -1809,7 +1825,7 @@ class _AdminScreenState extends State<AdminScreen> {
 
   Widget _buildUsuariosTab() {
     final activos = _usuariosAdmin.where((u) => u.activo).length;
-    final ancho = MediaQuery.of(context).size.width;
+    final ancho = MediaQuery.sizeOf(context).width;
     final botones = Wrap(spacing: 12, runSpacing: 10, children: [
       ElevatedButton.icon(
         onPressed: _roles.isEmpty ? null : () => _mostrarFormUsuario(),
@@ -1827,10 +1843,12 @@ class _AdminScreenState extends State<AdminScreen> {
         label: const Text('Nuevo rol'),
       ),
     ]);
+    // En pantallas anchas va dentro del banner oscuro; si no, sobre el fondo claro.
+    final enBanner = ancho >= 1300;
     final resumen = Wrap(spacing: 12, runSpacing: 10, children: [
-      UsrMiniStat('${_usuariosAdmin.length}', 'Usuarios'),
-      UsrMiniStat('$activos', 'Activos'),
-      UsrMiniStat('${_roles.length}', 'Roles'),
+      UsrMiniStat('${_usuariosAdmin.length}', 'Usuarios', sobreOscuro: enBanner),
+      UsrMiniStat('$activos', 'Activos', sobreOscuro: enBanner),
+      UsrMiniStat('${_roles.length}', 'Roles', sobreOscuro: enBanner),
     ]);
 
     return RefreshIndicator(
@@ -2084,7 +2102,7 @@ class _AdminScreenState extends State<AdminScreen> {
   }
 
   Widget _buildConfiguracionTab() {
-    final angosto = MediaQuery.of(context).size.width < 1100;
+    final angosto = MediaQuery.sizeOf(context).width < 1100;
     return AnimatedBuilder(
       animation: _cfgCambios,
       builder: (context, _) {

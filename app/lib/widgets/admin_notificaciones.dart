@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../api_service.dart';
 import '../config.dart';
@@ -67,7 +66,6 @@ class _NotificacionesSyncPanelState extends State<NotificacionesSyncPanel> {
   Map<String, dynamic>? _resCorreo;
   Map<String, dynamic>? _resWa;
 
-  bool? _guiaAbierta;
 
   bool _cargandoHist = true;
   bool _enCurso = false;
@@ -203,8 +201,6 @@ class _NotificacionesSyncPanelState extends State<NotificacionesSyncPanel> {
   Widget build(BuildContext context) {
     final correo = (_estado?['correo'] as Map?)?.cast<String, dynamic>();
     final wa = (_estado?['whatsapp'] as Map?)?.cast<String, dynamic>();
-    final correoOk = correo?['configurado'] == true;
-    final guiaAbierta = _guiaAbierta ?? (_estado != null && !correoOk);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -218,7 +214,7 @@ class _NotificacionesSyncPanelState extends State<NotificacionesSyncPanel> {
               icono: Icons.lock_outline,
             ),
           ),
-        if (widget.verNotificaciones) ..._bloqueNotificaciones(correo, wa, guiaAbierta),
+        if (widget.verNotificaciones) ..._bloqueNotificaciones(correo, wa),
         if (widget.verSincronizacion)
           _panelSync()
         else
@@ -231,7 +227,7 @@ class _NotificacionesSyncPanelState extends State<NotificacionesSyncPanel> {
     );
   }
 
-  List<Widget> _bloqueNotificaciones(Map<String, dynamic>? correo, Map<String, dynamic>? wa, bool guiaAbierta) {
+  List<Widget> _bloqueNotificaciones(Map<String, dynamic>? correo, Map<String, dynamic>? wa) {
     return [
         if (_errorEstado != null)
           Padding(
@@ -251,24 +247,6 @@ class _NotificacionesSyncPanelState extends State<NotificacionesSyncPanel> {
             _tarjetaCorreo(correo),
             _tarjetaWhatsapp(wa),
           ],
-        ),
-        const SizedBox(height: 18),
-        AdminPanel(
-          titulo: 'Cómo obtener la contraseña de aplicación de Google',
-          subtitulo: 'Necesaria para que el servidor envíe correos con Gmail (SMTP_PASS)',
-          icono: Icons.vpn_key_outlined,
-          colores: AdminColores.ambar,
-          accion: TextButton.icon(
-            onPressed: () => setState(() => _guiaAbierta = !guiaAbierta),
-            icon: Icon(guiaAbierta ? Icons.expand_less : Icons.expand_more, size: 20),
-            label: Text(guiaAbierta ? 'Ocultar guía' : 'Ver guía'),
-          ),
-          child: AnimatedSize(
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeOutCubic,
-            alignment: Alignment.topCenter,
-            child: guiaAbierta ? const _GuiaGoogle() : const SizedBox(width: double.infinity),
-          ),
         ),
         const SizedBox(height: 18),
     ];
@@ -300,7 +278,7 @@ class _NotificacionesSyncPanelState extends State<NotificacionesSyncPanel> {
                   style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.steel)),
               const SizedBox(height: 6),
               if (destinatarios.isEmpty)
-                const Text('Sin destinatarios (EMAIL_DESTINO vacío).',
+                const Text('Sin destinatarios configurados.',
                     style: TextStyle(fontSize: 12.5, color: AppColors.bad))
               else
                 Wrap(spacing: 6, runSpacing: 6, children: [
@@ -320,7 +298,7 @@ class _NotificacionesSyncPanelState extends State<NotificacionesSyncPanel> {
         ),
         const SizedBox(height: 12),
         ElevatedButton.icon(
-          onPressed: _probandoCorreo ? null : () => _probar('correo'),
+          onPressed: _probandoCorreo || c?['configurado'] != true ? null : () => _probar('correo'),
           icon: _probandoCorreo ? const CfgSpinner() : const Icon(Icons.send_outlined, size: 18),
           label: Text(_probandoCorreo ? 'Enviando…' : 'Enviar correo de prueba'),
         ),
@@ -342,13 +320,14 @@ class _NotificacionesSyncPanelState extends State<NotificacionesSyncPanel> {
       ],
       pruebas: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         const CfgAviso(
-          texto: 'La prueba envía un mensaje corto al número configurado en WHATSAPP_DESTINO.',
+          texto: 'La prueba envía un mensaje corto al número de destino configurado.',
           color: AppColors.steel,
           icono: Icons.info_outline,
         ),
         const SizedBox(height: 12),
         ElevatedButton.icon(
-          onPressed: _probandoWa ? null : () => _probar('whatsapp'),
+          // Sin configurar, la prueba solo daría error: se desactiva el botón.
+          onPressed: _probandoWa || w?['configurado'] != true ? null : () => _probar('whatsapp'),
           style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1FA855)),
           icon: _probandoWa ? const CfgSpinner() : const Icon(Icons.send_outlined, size: 18),
           label: Text(_probandoWa ? 'Enviando…' : 'Enviar WhatsApp de prueba'),
@@ -576,23 +555,15 @@ class _TarjetaCanal extends StatelessWidget {
               const Row(children: [
                 Icon(Icons.warning_amber_rounded, size: 18, color: AppColors.bad),
                 SizedBox(width: 8),
-                Text('Faltan estas variables en el .env del servidor',
-                    style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: AppColors.bad)),
+                Expanded(
+                  child: Text('Este canal todavía no está activado',
+                      style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: AppColors.bad)),
+                ),
               ]),
-              const SizedBox(height: 8),
-              Wrap(spacing: 6, runSpacing: 6, children: [
-                for (final f in faltantes)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                    decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: AppColors.bad.withValues(alpha: 0.35))),
-                    child: Text(f,
-                        style: const TextStyle(
-                            fontFamily: 'monospace', fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.bad)),
-                  ),
-              ]),
+              const SizedBox(height: 6),
+              const Text('Lo activa el equipo de desarrollo en el servidor. Mientras tanto, las reservas '
+                  'siguen funcionando con normalidad.',
+                  style: TextStyle(fontSize: 12.5, color: AppColors.char, height: 1.4)),
             ]),
           ),
         ],
@@ -638,19 +609,18 @@ class _ResultadoPrueba extends StatelessWidget {
   String? _consejo(String error) {
     final e = error.toLowerCase();
     if (e.contains('faltan variables')) {
-      return 'Completa esas variables en el archivo .env del servidor y reinicia el servicio (ver la guía).';
+      return 'Este canal todavía no está activado. Lo activa el equipo de desarrollo.';
     }
     if (e.contains('535') || e.contains('authentication') || e.contains('username and password') || e.contains('auth')) {
-      return 'Google rechazó el acceso. Usa una contraseña de aplicación de 16 letras (no tu contraseña normal) '
-          'y verifica que SMTP_USER sea el mismo correo que la generó.';
+      return 'El proveedor de correo rechazó el acceso. Avisa al equipo de desarrollo para renovar la clave.';
     }
     if (e.contains('timeout') || e.contains('timed out') || e.contains('socket') || e.contains('connection')) {
-      return 'No se pudo conectar. Revisa SMTP_HOST (smtp.gmail.com), SMTP_PORT (587) y que el servidor tenga salida a internet.';
+      return 'No se pudo conectar en este momento. Intenta de nuevo en unos minutos; si sigue, avisa al equipo de desarrollo.';
     }
     if (e.contains('token') || e.contains('190') || e.contains('oauth')) {
-      return 'El token de WhatsApp parece vencido o inválido. Genera uno nuevo en Meta for Developers.';
+      return 'El acceso a WhatsApp venció. Avisa al equipo de desarrollo para renovarlo.';
     }
-    return null;
+    return 'Si el problema continúa, avisa al equipo de desarrollo con este mensaje.';
   }
 
   @override
@@ -764,384 +734,4 @@ class _FilaHistorial extends StatelessWidget {
         const SizedBox(width: 4),
         Text(t, style: const TextStyle(fontSize: 12.5, color: AppColors.char)),
       ]);
-}
-
-// =====================================================================
-// Guía ilustrada: contraseña de aplicación de Google
-// =====================================================================
-
-class _GuiaGoogle extends StatelessWidget {
-  const _GuiaGoogle();
-
-  @override
-  Widget build(BuildContext context) {
-    const claves = 'SMTP_HOST=smtp.gmail.com\n'
-        'SMTP_PORT=587\n'
-        'SMTP_USER=tu_correo@gmail.com\n'
-        'SMTP_PASS=clave_de_16_letras\n'
-        'EMAIL_DESTINO=correo1@ejemplo.com,correo2@ejemplo.com';
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      CfgCuadricula(
-        minAncho: 380,
-        maxColumnas: 3,
-        espacio: 16,
-        children: [
-          _Paso(
-            n: 1,
-            titulo: 'Entra a tu Cuenta de Google → Seguridad',
-            texto: 'Abre myaccount.google.com con el mismo correo que usará la tienda y elige «Seguridad» '
-                'en el menú de la izquierda.',
-            ilustracion: const _MockMenuGoogle(),
-          ),
-          _Paso(
-            n: 2,
-            titulo: 'Activa la «Verificación en 2 pasos»',
-            texto: 'Es obligatoria para poder crear contraseñas de aplicación. Si ya dice «Activada», sigue al paso 3.',
-            ilustracion: const _MockDosPasos(),
-          ),
-          _Paso(
-            n: 3,
-            titulo: 'Abre «Contraseñas de aplicaciones»',
-            texto: 'Búscala con la lupa de la cuenta de Google o entra directo a '
-                'myaccount.google.com/apppasswords.',
-            ilustracion: const _MockBuscador(),
-          ),
-          _Paso(
-            n: 4,
-            titulo: 'Crea una llamada «Maykel»',
-            texto: 'Escribe «Maykel» como nombre de la aplicación y presiona «Crear».',
-            ilustracion: const _MockCrear(),
-          ),
-          _Paso(
-            n: 5,
-            titulo: 'Copia la clave de 16 letras',
-            texto: 'Google la muestra una sola vez, en grupos de cuatro. Cópiala sin espacios; '
-                'esa es tu SMTP_PASS.',
-            ilustracion: const _MockClave(),
-          ),
-          _Paso(
-            n: 6,
-            titulo: 'Pégala en el archivo .env del servidor',
-            texto: 'Edita el .env del backend con estos valores (SMTP_USER es tu correo y EMAIL_DESTINO '
-                'los correos del equipo, separados por coma).',
-            ilustracion: const _Codigo(texto: claves),
-          ),
-          _Paso(
-            n: 7,
-            titulo: 'Reinicia el servicio',
-            texto: 'En el servidor ejecuta este comando para que lea la nueva configuración.',
-            ilustracion: const _Codigo(texto: 'sudo systemctl restart maykel', prefijo: r'$ '),
-          ),
-        ],
-      ),
-      const SizedBox(height: 16),
-      const CfgAviso(
-        texto: 'Listo: vuelve a esta pantalla, actualiza el estado y presiona «Enviar correo de prueba». '
-            'Nunca compartas la clave de 16 letras ni la pegues en el sitio: solo va en el .env del servidor.',
-        color: AppColors.ok,
-        icono: Icons.task_alt,
-      ),
-    ]);
-  }
-}
-
-class _Paso extends StatelessWidget {
-  final int n;
-  final String titulo;
-  final String texto;
-  final Widget ilustracion;
-  const _Paso({required this.n, required this.titulo, required this.texto, required this.ilustracion});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.paper.withValues(alpha: 0.55),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AdminColores.borde),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Container(
-            width: 30,
-            height: 30,
-            alignment: Alignment.center,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(colors: AdminColores.rojo),
-            ),
-            child: Text('$n', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900)),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.only(top: 5),
-              child: Text(titulo,
-                  style: const TextStyle(
-                      fontSize: 14.5, fontWeight: FontWeight.w900, color: AppColors.char, height: 1.25)),
-            ),
-          ),
-        ]),
-        const SizedBox(height: 8),
-        Text(texto, style: const TextStyle(fontSize: 12.5, color: AppColors.steel, height: 1.45)),
-        const SizedBox(height: 12),
-        ilustracion,
-      ]),
-    );
-  }
-}
-
-/// Marco tipo ventana de navegador para las ilustraciones de la guía.
-class _Ventana extends StatelessWidget {
-  final String url;
-  final Widget child;
-  const _Ventana({required this.url, required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AdminColores.borde),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(children: [
-        Container(
-          color: const Color(0xFFEFEFF1),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-          child: Row(children: [
-            for (final c in const [Color(0xFFFF5F57), Color(0xFFFEBC2E), Color(0xFF28C840)])
-              Container(
-                  width: 8, height: 8, margin: const EdgeInsets.only(right: 4), decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)),
-                child: Row(children: [
-                  const Icon(Icons.lock_outline, size: 11, color: AppColors.steel),
-                  const SizedBox(width: 4),
-                  Expanded(
-                      child: Text(url,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 10.5, color: AppColors.steel))),
-                ]),
-              ),
-            ),
-          ]),
-        ),
-        Padding(padding: const EdgeInsets.all(12), child: child),
-      ]),
-    );
-  }
-}
-
-class _MockMenuGoogle extends StatelessWidget {
-  const _MockMenuGoogle();
-
-  @override
-  Widget build(BuildContext context) {
-    Widget item(IconData i, String t, {bool activo = false}) => Container(
-          margin: const EdgeInsets.only(bottom: 3),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            color: activo ? const Color(0xFFD3E3FD) : Colors.transparent,
-            borderRadius: BorderRadius.circular(20),
-            border: activo ? Border.all(color: AppColors.red, width: 1.6) : null,
-          ),
-          child: Row(children: [
-            Icon(i, size: 15, color: activo ? const Color(0xFF0B57D0) : AppColors.steel),
-            const SizedBox(width: 8),
-            Text(t,
-                style: TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: activo ? FontWeight.w800 : FontWeight.w500,
-                    color: activo ? const Color(0xFF0B57D0) : AppColors.char)),
-          ]),
-        );
-    return _Ventana(
-      url: 'myaccount.google.com',
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          const CircleAvatar(radius: 12, backgroundColor: Color(0xFF1B4F8A), child: Text('M', style: TextStyle(fontSize: 11, color: Colors.white))),
-          const SizedBox(width: 8),
-          const Text('Cuenta de Google', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-        ]),
-        const SizedBox(height: 8),
-        item(Icons.home_outlined, 'Inicio'),
-        item(Icons.person_outline, 'Información personal'),
-        item(Icons.shield_outlined, 'Seguridad', activo: true),
-        item(Icons.people_outline, 'Contactos'),
-      ]),
-    );
-  }
-}
-
-class _MockDosPasos extends StatelessWidget {
-  const _MockDosPasos();
-
-  @override
-  Widget build(BuildContext context) {
-    return _Ventana(
-      url: 'myaccount.google.com/security',
-      child: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AppColors.red, width: 1.6),
-        ),
-        child: Row(children: [
-          const Icon(Icons.phonelink_lock_outlined, color: Color(0xFF0B57D0)),
-          const SizedBox(width: 10),
-          const Expanded(
-              child: Text('Verificación en 2 pasos',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800))),
-          PillEstado('Activada', AppColors.ok, icono: Icons.check),
-        ]),
-      ),
-    );
-  }
-}
-
-class _MockBuscador extends StatelessWidget {
-  const _MockBuscador();
-
-  @override
-  Widget build(BuildContext context) {
-    return _Ventana(
-      url: 'myaccount.google.com/apppasswords',
-      child: Column(children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-          decoration: BoxDecoration(color: const Color(0xFFF1F3F4), borderRadius: BorderRadius.circular(20)),
-          child: const Row(children: [
-            Icon(Icons.search, size: 16, color: AppColors.steel),
-            SizedBox(width: 6),
-            Text('Contraseñas de aplicaciones', style: TextStyle(fontSize: 11.5)),
-          ]),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: AppColors.red, width: 1.6),
-          ),
-          child: const Row(children: [
-            Icon(Icons.key_outlined, size: 16, color: Color(0xFF0B57D0)),
-            SizedBox(width: 8),
-            Text('Contraseñas de aplicaciones', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800)),
-            Spacer(),
-            Icon(Icons.chevron_right, size: 16, color: AppColors.steel),
-          ]),
-        ),
-      ]),
-    );
-  }
-}
-
-class _MockCrear extends StatelessWidget {
-  const _MockCrear();
-
-  @override
-  Widget build(BuildContext context) {
-    return _Ventana(
-      url: 'myaccount.google.com/apppasswords',
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Nombre de la aplicación', style: TextStyle(fontSize: 10.5, color: AppColors.steel)),
-        const SizedBox(height: 4),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: const Color(0xFF0B57D0), width: 1.6),
-          ),
-          child: const Row(children: [
-            Text('Maykel', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
-            SizedBox(width: 2),
-            SizedBox(height: 14, child: VerticalDivider(width: 2, thickness: 1.4, color: Color(0xFF0B57D0))),
-          ]),
-        ),
-        const SizedBox(height: 10),
-        Align(
-          alignment: Alignment.centerRight,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
-            decoration: BoxDecoration(
-              color: const Color(0xFF0B57D0),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: AppColors.red, width: 1.6),
-            ),
-            child: const Text('Crear', style: TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w800)),
-          ),
-        ),
-      ]),
-    );
-  }
-}
-
-class _MockClave extends StatelessWidget {
-  const _MockClave();
-
-  @override
-  Widget build(BuildContext context) {
-    return _Ventana(
-      url: 'myaccount.google.com/apppasswords',
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Tu contraseña de aplicación', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800)),
-        const SizedBox(height: 8),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(
-            color: const Color(0xFFFFF4C2),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: AppColors.red, width: 1.6),
-          ),
-          child: const Text('abcd efgh ijkl mnop',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontFamily: 'monospace', fontSize: 15, fontWeight: FontWeight.w800, letterSpacing: 1.2)),
-        ),
-        const SizedBox(height: 6),
-        const Text('16 letras · se muestra una sola vez',
-            style: TextStyle(fontSize: 10.5, color: AppColors.steel)),
-      ]),
-    );
-  }
-}
-
-class _Codigo extends StatelessWidget {
-  final String texto;
-  final String prefijo;
-  const _Codigo({required this.texto, this.prefijo = ''});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 10, 6, 10),
-      decoration: BoxDecoration(color: const Color(0xFF1E1F24), borderRadius: BorderRadius.circular(12)),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Expanded(
-          child: SelectableText(
-            '$prefijo$texto',
-            style: const TextStyle(
-                fontFamily: 'monospace', fontSize: 11.5, height: 1.55, color: Color(0xFFB7F0C4)),
-          ),
-        ),
-        IconButton(
-          tooltip: 'Copiar',
-          visualDensity: VisualDensity.compact,
-          icon: const Icon(Icons.copy_rounded, size: 17, color: Colors.white70),
-          onPressed: () {
-            Clipboard.setData(ClipboardData(text: texto));
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Copiado al portapapeles'), duration: Duration(seconds: 2)),
-            );
-          },
-        ),
-      ]),
-    );
-  }
 }

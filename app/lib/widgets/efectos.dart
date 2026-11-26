@@ -30,6 +30,13 @@ bool enPantalla(BuildContext context) {
   return arriba < alto && arriba + box.size.height > 0;
 }
 
+/// false cuando la pestaña del navegador está oculta o minimizada.
+/// Los refrescos automáticos lo usan para no pedir datos que nadie está viendo.
+bool pestanaVisible() {
+  final estado = WidgetsBinding.instance.lifecycleState;
+  return estado == null || estado == AppLifecycleState.resumed;
+}
+
 /// Eleva y agranda levemente el hijo al pasar el mouse.
 class HoverLift extends StatefulWidget {
   final Widget Function(BuildContext, bool hover) builder;

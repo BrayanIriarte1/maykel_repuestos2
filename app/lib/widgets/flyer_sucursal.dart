@@ -18,12 +18,16 @@ bool _yaMostrado = false;
 Future<void> mostrarFlyerSucursal(BuildContext context) async {
   if (_yaMostrado) return;
   _yaMostrado = true;
+  // Solo para clientes en la portada: si se entró directo al panel (#/admin),
+  // la portada queda debajo y el flyer no debe taparlo.
+  bool portadaAlFrente() => ModalRoute.of(context)?.isCurrent ?? true;
+  if (!portadaAlFrente()) return;
   try {
     await precacheImage(const AssetImage(_rutaFlyer), context);
   } catch (_) {
     return; // Si la imagen no carga, mejor no mostrar nada.
   }
-  if (!context.mounted) return;
+  if (!context.mounted || !portadaAlFrente()) return;
   await showGeneralDialog(
     context: context,
     barrierDismissible: true,

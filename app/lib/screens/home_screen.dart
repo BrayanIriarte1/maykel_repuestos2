@@ -751,6 +751,8 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _abrirAdmin() async {
     final ok = ApiService.instance.sesionAdminActiva || await mostrarLoginAdmin(context) == true;
     if (ok && mounted) {
+      // Los avisos del cliente ("Agregado a tu reserva") no deben seguir en el panel.
+      ScaffoldMessenger.of(context).clearSnackBars();
       await Navigator.of(context).pushNamed('/admin');
       _cargarProductos();
     }
@@ -762,6 +764,8 @@ class _HomeScreenState extends State<HomeScreen> {
     messenger.hideCurrentSnackBar();
     messenger.showSnackBar(SnackBar(
       duration: const Duration(seconds: 4),
+      // Con botón, Flutter deja el aviso fijo hasta cerrarlo; así se va solo.
+      persist: false,
       content: Text(agregado
           ? 'Agregado a tu reserva: ${p.nombre}'
           : 'Ya tienes todo el stock disponible de este repuesto en tu reserva.'),
@@ -777,6 +781,7 @@ class _HomeScreenState extends State<HomeScreen> {
     messenger.hideCurrentSnackBar();
     messenger.showSnackBar(SnackBar(
       duration: const Duration(seconds: 6),
+      persist: false,
       content: Text('Registramos tu interés en ${p.nombre}. Consúltanos por su reposición.'),
       action: SnackBarAction(
         label: 'WhatsApp',
@@ -805,7 +810,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final ancho = MediaQuery.of(context).size.width;
+    final ancho = MediaQuery.sizeOf(context).width;
     final esAngosto = ancho < 760;
 
     return Scaffold(
@@ -962,7 +967,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           const SizedBox(width: 24),
-          if (!esAngosto && MediaQuery.of(context).size.width >= 1500)
+          if (!esAngosto && MediaQuery.sizeOf(context).width >= 1500)
             const Expanded(child: HorarioMarquesina())
           else
             const Spacer(),
@@ -995,7 +1000,7 @@ class _HomeScreenState extends State<HomeScreen> {
   // ---------- Hero ----------
 
   Widget _buildHero(bool esAngosto) {
-    final grande = MediaQuery.of(context).size.width >= 1600;
+    final grande = MediaQuery.sizeOf(context).width >= 1600;
     final textos = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

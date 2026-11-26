@@ -204,7 +204,7 @@ class _AdminLoginDialogState extends State<_AdminLoginDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final ancho = MediaQuery.of(context).size.width;
+    final ancho = MediaQuery.sizeOf(context).width;
     final ancha = ancho >= 720;
     return Dialog(
       clipBehavior: Clip.antiAlias,

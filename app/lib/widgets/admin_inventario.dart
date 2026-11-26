@@ -73,6 +73,9 @@ class _InventarioAdminState extends State<InventarioAdmin> {
   Timer? _debounce;
   Timer? _auto;
   int _ticks = 0;
+  // Número de la última consulta: si llega antes una respuesta vieja (escribir
+  // rápido en el buscador), se descarta para no mostrar resultados desfasados.
+  int _consulta = 0;
 
   String _q = '';
   String _categoria = '';
@@ -179,6 +182,7 @@ class _InventarioAdminState extends State<InventarioAdmin> {
 
   void _refrescoAutomatico() {
     if (!mounted || _cargando || _guardando || _pendientes.isNotEmpty || _escribiendo) return;
+    if (!pestanaVisible()) return;
     if (ModalRoute.of(context)?.isCurrent != true) return;
     _cargar(silencioso: true);
     if (++_ticks % 3 == 0) _cargarContadores();
@@ -191,7 +195,13 @@ class _InventarioAdminState extends State<InventarioAdmin> {
         _error = null;
       });
     }
+    final consulta = ++_consulta;
     try {
+      // La lista y el estado de la sincronización se piden a la vez.
+      final estadoFuturo = ApiService.instance
+          .getEstadoInventario()
+          .then<EstadoInventario?>((e) => e)
+          .catchError((Object _) => null);
       final r = await ApiService.instance.getRepuestosAdmin(
         q: _q,
         categoria: _categoria,
@@ -200,11 +210,8 @@ class _InventarioAdminState extends State<InventarioAdmin> {
         pagina: _pagina,
         limite: _porPagina,
       );
-      EstadoInventario? estado;
-      try {
-        estado = await ApiService.instance.getEstadoInventario();
-      } catch (_) {}
-      if (!mounted) return;
+      final estado = await estadoFuturo;
+      if (!mounted || consulta != _consulta) return;
       // Si el filtro dejó menos páginas que la actual, vuelve a la última.
       if (r.items.isEmpty && r.total > 0 && _pagina > 1) {
         _pagina = (r.total / _porPagina).ceil();
@@ -221,7 +228,7 @@ class _InventarioAdminState extends State<InventarioAdmin> {
         _error = null;
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || consulta != _consulta) return;
       if (silencioso) return;
       setState(() {
         _error = _msg(e);

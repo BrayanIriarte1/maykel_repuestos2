@@ -254,8 +254,8 @@ Map<String, dynamic> contenidoPorDefecto() {
       },
     ],
     'contacto': {
-      'whatsapp': '56969170551',
-      'email': 'contacto@maykelrepuestos.cl',
+      'whatsapp': '56989552407',
+      'email': 'maykelrepuestos2@gmail.com',
       'direccion': 'Vargas #2275, Calama, Región de Antofagasta',
       'mapsUrl':
           'https://www.google.com/maps/place/Maykel+Repuestos/@-22.4608953,-68.9286172,21z',

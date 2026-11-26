@@ -713,8 +713,8 @@ class ContenidoSitio {
             titulo: 'Atención a talleres',
             descripcion: 'Precios y stock pensados para talleres y transportistas.'),
       ],
-      contactoWhatsapp: '56969170551',
-      contactoEmail: 'gesma.perez@gmail.com',
+      contactoWhatsapp: '56989552407',
+      contactoEmail: 'maykelrepuestos2@gmail.com',
       contactoDireccion: 'Vargas #2275, Calama, Región de Antofagasta',
       contactoMapsUrl:
           'https://www.google.com/maps/place/Maykel+Repuestos/@-22.4608953,-68.9286172,21z/data=!4m6!3m5!1s0x4ab51954d66992f7:0x3daf1bf514abec72!8m2!3d-22.4607923!4d-68.9285291',
@@ -726,7 +726,7 @@ class ContenidoSitio {
           texto: 'Este sitio web es operado por Maykel Repuestos, negocio dedicado a la '
               'venta de repuestos automotrices, con domicilio en Vargas #2275, '
               'Calama, Región de Antofagasta, Chile. Para consultas sobre este '
-              'aviso legal, puedes escribir a gesma.perez@gmail.com.',
+              'aviso legal, puedes escribir a maykelrepuestos2@gmail.com.',
         ),
         SeccionLegal(
           titulo: '2. Objeto del sitio',
@@ -792,8 +792,8 @@ class ContenidoSitio {
         SeccionLegal(
           titulo: '9. Contacto',
           texto: 'Para cualquier consulta sobre este aviso legal, tus datos o el '
-              'funcionamiento del sitio, puedes escribir a gesma.perez@gmail.com '
-              'o por WhatsApp al +56 9 69170551 .',
+              'funcionamiento del sitio, puedes escribir a maykelrepuestos2@gmail.com '
+              'o por WhatsApp al +56 9 8955 2407.',
         ),
       ],
     );

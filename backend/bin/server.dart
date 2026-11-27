@@ -19,6 +19,7 @@ import 'package:shelf_static/shelf_static.dart';
 import '../lib/busqueda.dart';
 import '../lib/db.dart';
 import '../lib/notificador.dart';
+import '../lib/pagina_404.dart';
 import '../lib/pdf_reserva.dart';
 import '../lib/seguridad.dart';
 import '../lib/vehiculos.dart';
@@ -437,6 +438,61 @@ Middleware _erroresComoJson() {
     };
   };
 }
+
+/// Datos de contacto para la página 404 (se leen de Configuración cada 5 min).
+({DateTime hasta, Map<String, dynamic> datos})? _cacheContacto404;
+
+Future<Map<String, dynamic>> _contenidoParaPagina404() async {
+  final cache = _cacheContacto404;
+  if (cache != null && DateTime.now().isBefore(cache.hasta)) return cache.datos;
+  Map<String, dynamic> datos = contenidoPorDefecto();
+  try {
+    final rows = await db.conn.execute(
+        "SELECT contenido FROM configuracion_sitio WHERE clave = 'principal' LIMIT 1");
+    if (rows.isNotEmpty) {
+      final raw = rows.first[0];
+      datos = (raw is String ? jsonDecode(raw) : raw) as Map<String, dynamic>;
+    }
+  } catch (_) {
+    // Sin base de datos se usan los datos por defecto.
+  }
+  _cacheContacto404 = (hasta: DateTime.now().add(const Duration(minutes: 5)), datos: datos);
+  return datos;
+}
+
+/// Si el navegador abre una dirección que no existe, muestra la página 404
+/// con la marca en vez de un "Not Found" de texto. La API (fetch/JSON) no
+/// pide HTML, así que sigue recibiendo su respuesta de siempre.
+Middleware _pagina404Html() {
+  return (Handler inner) {
+    return (Request request) async {
+      final resp = await inner(request);
+      final pideHtml = (request.headers['accept'] ?? '').contains('text/html');
+      if (resp.statusCode != 404 || request.method != 'GET' || !pideHtml) return resp;
+      final c = await _contenidoParaPagina404();
+      final contacto = (c['contacto'] as Map?) ?? const {};
+      final textos = (c['textos'] as Map?) ?? const {};
+      String txt(Map m, String k) => (m[k] ?? '').toString().trim();
+      final nombre = txt(textos, 'nombreNegocio');
+      return Response.notFound(
+        paginaNoEncontrada(
+          nombre: nombre.isEmpty ? 'Maykel Repuestos 2' : _tituloNegocio(nombre),
+          direccion: txt(contacto, 'direccion'),
+          email: txt(contacto, 'email'),
+          whatsapp: txt(contacto, 'whatsapp'),
+          horario: txt(contacto, 'horario'),
+        ),
+        headers: {'content-type': 'text/html; charset=utf-8'},
+      );
+    };
+  };
+}
+
+/// "MAYKEL REPUESTOS 2" -> "Maykel Repuestos 2" para el título de la pestaña.
+String _tituloNegocio(String s) => s
+    .split(' ')
+    .map((w) => w.isEmpty ? w : w[0].toUpperCase() + w.substring(1).toLowerCase())
+    .join(' ');
 
 /// Cabeceras de seguridad y de caché: la API nunca se cachea (así el stock que
 /// ve el usuario es siempre el real) y el sitio se revalida en cada visita.
@@ -2441,6 +2497,7 @@ void main(List<String> args) async {
   final pipeline = const Pipeline()
       .addMiddleware(logRequests())
       .addMiddleware(_cabecerasSeguras())
+      .addMiddleware(_pagina404Html())
       .addMiddleware(_erroresComoJson())
       .addMiddleware(corsHeaders(headers: {ACCESS_CONTROL_ALLOW_ORIGIN: _origenCors}))
       .addMiddleware(_authSoloAdmin())

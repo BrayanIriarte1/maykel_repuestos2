@@ -144,7 +144,7 @@ No ejecutes además la tarea programada de Windows (`instalar_sync.ps1`): sobrar
 - HTTPS con Let's Encrypt (TLS 1.2 y 1.3), cabecera HSTS y compresión gzip en Nginx (`/etc/nginx/conf.d/maykel-gzip.conf`); renovación automática (`certbot renew --dry-run` para probarla).
 - Acceso al servidor solo por llave SSH. No compartas por chat contraseñas, `.env` ni la llave privada `maykel_vps`.
 - Las claves de `admin`, `daniel` y `vendedor` se cambian en **Admin → Usuarios**.
-- `/api/docs` es público; no expone datos, pero los endpoints `/api/admin/*` exigen sesión.
+- `/api/docs` (Swagger) está **apagado en producción**: solo se activa con `API_DOCS=1` en el `.env`, y se usa en el PC de desarrollo. Sin esa variable responde 404. Los endpoints `/api/admin/*` además exigen sesión.
 - El repositorio es público: jamás subas `.env`, claves ni respaldos.
 
 ---
@@ -213,4 +213,4 @@ Resumen de lo que se hizo; usa Ubuntu 24.04 LTS con acceso root por SSH y ≥ 20
     0 3 * * * postgres pg_dump -Fc maykel_repuestos2 > /opt/respaldos/maykel_$(date +\%F).dump && find /opt/respaldos -name '*.dump' -mtime +14 -delete
     ```
     y `mkdir -p /opt/respaldos && chown postgres /opt/respaldos`.
-12. **Prueba final:** `https://tudominio.cl`, login, reserva de prueba, `/api/docs`, y `./tools/sync_agent --sistema` sin errores.
+12. **Prueba final:** `https://tudominio.cl`, login, reserva de prueba, que `/api/docs` responda 404, y `./tools/sync_agent --sistema` sin errores.

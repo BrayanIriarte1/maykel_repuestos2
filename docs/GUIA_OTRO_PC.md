@@ -152,7 +152,7 @@ La primera vez descarga paquetes y compila la web (1 a 3 minutos). Luego verás:
 Servidor en http://localhost:8080  (Ctrl+C para detenerlo)
 ```
 Abre **http://localhost:8080** en Chrome. El panel se abre con el botón **Admin** (arriba a la derecha).
-Documentación de la API: **http://localhost:8080/api/docs**.
+Documentación de la API: **http://localhost:8080/api/docs** (requiere `API_DOCS=1` en `backend/.env`; en producción está apagada).
 
 ### Paso 8 — Activa la sincronización cada 30 minutos (opcional)
 

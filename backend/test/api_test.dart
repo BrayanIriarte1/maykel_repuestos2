@@ -13,12 +13,17 @@ final adminUser = Platform.environment['TEST_ADMIN_USER'] ?? 'admin';
 final adminPass = Platform.environment['TEST_ADMIN_PASS'] ?? 'maykel2026';
 final syncToken = Platform.environment['TEST_SYNC_TOKEN'] ?? _tokenDeEnv();
 
-String _tokenDeEnv() {
+String _tokenDeEnv() => _valorEnv('SYNC_API_TOKEN');
+
+/// Lee una variable del backend/.env (o del entorno TEST_<NOMBRE>).
+String _valorEnv(String nombre) {
+  final delEntorno = Platform.environment['TEST_$nombre'];
+  if (delEntorno != null) return delEntorno;
   final f = File('.env');
   if (f.existsSync()) {
     for (final l in f.readAsLinesSync()) {
-      if (l.startsWith('SYNC_API_TOKEN=')) {
-        return l.substring('SYNC_API_TOKEN='.length).trim();
+      if (l.startsWith('$nombre=')) {
+        return l.substring('$nombre='.length).trim();
       }
     }
   }
@@ -93,9 +98,11 @@ void main() {
       expect((await http.get(u('/api/catalogo/filtros?marca=${Uri.encodeQueryComponent(marca)}'))).statusCode, 200);
     });
 
-    test('documentación OpenAPI disponible', () async {
-      expect((await http.get(u('/api/docs'))).statusCode, 200);
-      expect((await http.get(u('/api/docs/openapi.yaml'))).statusCode, 200);
+    test('documentación OpenAPI solo con API_DOCS=1', () async {
+      // Con API_DOCS=1 (desarrollo) se ve; sin él (producción) responde 404.
+      final esperado = _valorEnv('API_DOCS') == '1' ? 200 : 404;
+      expect((await http.get(u('/api/docs'))).statusCode, esperado);
+      expect((await http.get(u('/api/docs/openapi.yaml'))).statusCode, esperado);
     });
   });
 

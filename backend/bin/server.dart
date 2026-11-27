@@ -167,6 +167,9 @@ DateTime? _syncManualDesde;
 /// Origen permitido por CORS. En producción definir CORS_ORIGIN=https://tudominio.cl
 String get _origenCors => db.env['CORS_ORIGIN'] ?? '*';
 
+/// Documentación de la API (/api/docs) visible solo si API_DOCS=1.
+bool get _docsActivas => db.env['API_DOCS'] == '1';
+
 final String _dirUploads = p.join(_dirBackend, 'uploads', 'productos');
 const int _maxBytesImagen = 3 * 1024 * 1024;
 const Map<String, String> _extensionesImagen = {
@@ -2389,7 +2392,11 @@ void main(List<String> args) async {
   // ==========================================================================
   // DOCUMENTACIÓN DE LA API (OpenAPI + Swagger UI)
   // ==========================================================================
+  // Solo se publica con API_DOCS=1 en el .env (en el PC de desarrollo). En
+  // producción queda apagada: responde 404 como cualquier ruta inexistente,
+  // para no mostrar a cualquiera el mapa completo de la API.
   router.get('/api/docs/openapi.yaml', (Request req) async {
+    if (!_docsActivas) return _errorResponse('Not Found', status: 404);
     final archivo = File(p.join(_dirBackend, 'docs', 'openapi.yaml'));
     if (!await archivo.exists()) {
       return _errorResponse('Especificación no encontrada', status: 404);
@@ -2401,6 +2408,7 @@ void main(List<String> args) async {
   });
 
   router.get('/api/docs', (Request req) {
+    if (!_docsActivas) return _errorResponse('Not Found', status: 404);
     return Response.ok(
       _paginaSwagger,
       headers: {'content-type': 'text/html; charset=utf-8'},
